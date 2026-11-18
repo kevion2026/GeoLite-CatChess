@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8">
+<title>GeoLite 棋艺测评 · Pikafish</title>
+<style>
+:root { --ink:#1f2a33; --muted:#66727d; --line:#dfe6ec; --bg:#f7f9fb; --accent:#3f6b8f; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink);
+  font:15px/1.7 "Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif; }
+main { max-width:980px; margin:0 auto; padding:48px 28px 72px; }
+h1 { font-size:26px; margin:0 0 6px; letter-spacing:.5px; }
+.sub { color:var(--muted); font-size:13px; margin-bottom:34px; }
+h2 { font-size:17px; margin:38px 0 10px; padding-left:10px; border-left:3px solid var(--accent); }
+p { margin:8px 0; }
+.card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:22px 24px; }
+.kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin:22px 0 6px; }
+.kpi { background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px 18px; }
+.kpi b { display:block; font-size:26px; font-weight:600; letter-spacing:.5px; }
+.kpi span { color:var(--muted); font-size:12px; }
+table { width:100%; border-collapse:collapse; background:#fff; font-size:13.5px;
+  border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+th,td { padding:9px 12px; border-bottom:1px solid var(--line); text-align:left; }
+th { background:#eef3f7; font-weight:600; font-size:12.5px; color:#33414d; }
+td.n,th.n { text-align:right; font-variant-numeric:tabular-nums; }
+tr:last-child td { border-bottom:none; }
+.chart { background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px 10px 8px; }
+.note { color:var(--muted); font-size:12.5px; margin-top:8px; }
+.tag { display:inline-block; padding:1px 8px; border:1px solid var(--line); border-radius:999px;
+  font-size:12px; color:var(--muted); background:#fff; margin-right:6px; }
+ul { margin:8px 0 0 18px; padding:0; }
+li { margin:5px 0; }
+</style>
+<main>
+  <h1>GeoLite 象棋引擎 · 棋艺测评</h1>
+  <div class="sub">
+    <span class="tag">参照引擎 Pikafish 2026-09-06</span>
+    <span class="tag">Windows x86-64</span>
+    <span class="tag">NNUE 48.4 MB</span>
+    <span class="tag">UCI 直连对局</span>
+    <span class="tag">被测版本 三空间 + 分支激活树</span>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><b>32</b><span>总对局</span></div>
+    <div class="kpi"><b>0 / 2 / 30</b><span>胜 / 和 / 负</span></div>
+    <div class="kpi"><b>56.2</b><span>200 节点档平均手数</span></div>
+    <div class="kpi"><b>7.9 ms</b><span>我方单步耗时</span></div>
+  </div>
+
+  <h2>一、测评方法</h2>
+  <div class="card">
+    <p>被测引擎以纯几何链路出着：三张点云各取三维，21 维状态加形与子力特征，由 24 分支激活树给出形势分，
+    局部与全局两条引力路线各出一手，第三空间仲裁定方向；方向内再由动态分支树展开候选着（宽 3、对手回应宽 1），
+    取符合度最高的一步。静态库扩到 3000 个分层状态。整个过程没有 α-β 剪枝，单步 4 至 9 毫秒。</p>
+    <p>参照方为 Pikafish 官方 2026-09-06 发布包（Windows x86-64，配套 pikafish.nnue）。对局通过 UCI 协议直连，
+    每方轮流执红黑；为避免两段确定性引擎反复下出同一盘棋，开局前 4 着随机走子，其后完全由引擎自行决策。
+    单局上限 240 着，同一局面出现三次判和；无合法着法判负。</p>
+  </div>
+
+  <h2>二、四档强度结果</h2>
+  <table>
+    <thead><tr><th>Pikafish 档位</th><th class="n">局数</th><th class="n">胜-和-负</th>
+    <th class="n">平均手数</th><th class="n">平均吃子</th><th class="n">我方单步</th></tr></thead>
+    <tbody><tr><td>200 节点</td><td class='n'>8</td><td class='n'>0 - 0 - 8</td><td class='n'>56.2</td><td class='n'>9.0</td><td class='n'>7.9 ms</td></tr><tr><td>1000 节点</td><td class='n'>8</td><td class='n'>0 - 0 - 8</td><td class='n'>41.2</td><td class='n'>8.6</td><td class='n'>6.6 ms</td></tr><tr><td>深度 1</td><td class='n'>8</td><td class='n'>0 - 2 - 6</td><td class='n'>55.5</td><td class='n'>6.8</td><td class='n'>9.3 ms</td></tr><tr><td>每步 100 ms</td><td class='n'>8</td><td class='n'>0 - 0 - 8</td><td class='n'>37.8</td><td class='n'>6.2</td><td class='n'>8.2 ms</td></tr></tbody>
+  </table>
+  <p class="note">“节点”指每步搜索节点上限；深度 1 为只搜一层；每步 100 ms 为时间限制。三档均强于被测引擎。</p>
+
+  <h2>三、平均手数分布</h2>
+  <div class="chart">
+    <svg width="100%" height="230" viewBox="0 0 400 230" preserveAspectRatio="xMidYMid meet">
+      <line x1="12" y1="170" x2="386" y2="170" stroke="#dfe6ec"/>
+      <g><rect x="20" y="30" width="52" height="140" rx="5" fill="#3f6b8f"/><text x="46" y="22" text-anchor="middle" font-size="12" fill="#26323c">56.2</text><text x="46" y="190" text-anchor="middle" font-size="11" fill="#5c6b7a">200 节点</text><text x="46" y="206" text-anchor="middle" font-size="10" fill="#8a97a3">0-0-8</text></g><g><rect x="110" y="67" width="52" height="103" rx="5" fill="#3f6b8f"/><text x="136" y="59" text-anchor="middle" font-size="12" fill="#26323c">41.2</text><text x="136" y="190" text-anchor="middle" font-size="11" fill="#5c6b7a">1000 节点</text><text x="136" y="206" text-anchor="middle" font-size="10" fill="#8a97a3">0-0-8</text></g><g><rect x="200" y="32" width="52" height="138" rx="5" fill="#3f6b8f"/><text x="226" y="24" text-anchor="middle" font-size="12" fill="#26323c">55.5</text><text x="226" y="190" text-anchor="middle" font-size="11" fill="#5c6b7a">深度 1</text><text x="226" y="206" text-anchor="middle" font-size="10" fill="#8a97a3">0-2-6</text></g><g><rect x="290" y="76" width="52" height="94" rx="5" fill="#3f6b8f"/><text x="316" y="68" text-anchor="middle" font-size="12" fill="#26323c">37.8</text><text x="316" y="190" text-anchor="middle" font-size="11" fill="#5c6b7a">每步 100 ms</text><text x="316" y="206" text-anchor="middle" font-size="10" fill="#8a97a3">0-0-8</text></g>
+    </svg>
+  </div>
+
+  <h2>四、逐局记录</h2>
+  <table>
+    <thead><tr><th>档位</th><th class="n">局</th><th>执子</th><th class="n">手数</th>
+    <th class="n">吃子</th><th class="n">我方单步</th><th class="n">结果</th></tr></thead>
+    <tbody><tr><td>200 节点</td><td class='n'>1</td><td>红</td><td class='n'>13</td><td class='n'>1</td><td class='n'>26.5 ms</td><td class='n'>负</td></tr><tr><td>200 节点</td><td class='n'>2</td><td>黑</td><td class='n'>68</td><td class='n'>7</td><td class='n'>6.1 ms</td><td class='n'>负</td></tr><tr><td>200 节点</td><td class='n'>3</td><td>红</td><td class='n'>43</td><td class='n'>7</td><td class='n'>6.1 ms</td><td class='n'>负</td></tr><tr><td>200 节点</td><td class='n'>4</td><td>黑</td><td class='n'>88</td><td class='n'>13</td><td class='n'>5.5 ms</td><td class='n'>负</td></tr><tr><td>200 节点</td><td class='n'>5</td><td>红</td><td class='n'>59</td><td class='n'>9</td><td class='n'>5.9 ms</td><td class='n'>负</td></tr><tr><td>200 节点</td><td class='n'>6</td><td>黑</td><td class='n'>82</td><td class='n'>15</td><td class='n'>4.2 ms</td><td class='n'>负</td></tr><tr><td>200 节点</td><td class='n'>7</td><td>红</td><td class='n'>43</td><td class='n'>9</td><td class='n'>4.9 ms</td><td class='n'>负</td></tr><tr><td>200 节点</td><td class='n'>8</td><td>黑</td><td class='n'>54</td><td class='n'>11</td><td class='n'>4.3 ms</td><td class='n'>负</td></tr><tr><td>1000 节点</td><td class='n'>1</td><td>红</td><td class='n'>39</td><td class='n'>6</td><td class='n'>11.5 ms</td><td class='n'>负</td></tr><tr><td>1000 节点</td><td class='n'>2</td><td>黑</td><td class='n'>28</td><td class='n'>5</td><td class='n'>6.8 ms</td><td class='n'>负</td></tr><tr><td>1000 节点</td><td class='n'>3</td><td>红</td><td class='n'>53</td><td class='n'>10</td><td class='n'>6.2 ms</td><td class='n'>负</td></tr><tr><td>1000 节点</td><td class='n'>4</td><td>黑</td><td class='n'>28</td><td class='n'>7</td><td class='n'>6.8 ms</td><td class='n'>负</td></tr><tr><td>1000 节点</td><td class='n'>5</td><td>红</td><td class='n'>59</td><td class='n'>12</td><td class='n'>4.9 ms</td><td class='n'>负</td></tr><tr><td>1000 节点</td><td class='n'>6</td><td>黑</td><td class='n'>30</td><td class='n'>6</td><td class='n'>5.5 ms</td><td class='n'>负</td></tr><tr><td>1000 节点</td><td class='n'>7</td><td>红</td><td class='n'>25</td><td class='n'>9</td><td class='n'>6.0 ms</td><td class='n'>负</td></tr><tr><td>1000 节点</td><td class='n'>8</td><td>黑</td><td class='n'>68</td><td class='n'>14</td><td class='n'>5.3 ms</td><td class='n'>负</td></tr><tr><td>深度 1</td><td class='n'>1</td><td>红</td><td class='n'>13</td><td class='n'>1</td><td class='n'>31.0 ms</td><td class='n'>负</td></tr><tr><td>深度 1</td><td class='n'>2</td><td>黑</td><td class='n'>23</td><td class='n'>2</td><td class='n'>9.1 ms</td><td class='n'>和</td></tr><tr><td>深度 1</td><td class='n'>3</td><td>红</td><td class='n'>70</td><td class='n'>4</td><td class='n'>5.8 ms</td><td class='n'>和</td></tr><tr><td>深度 1</td><td class='n'>4</td><td>黑</td><td class='n'>36</td><td class='n'>6</td><td class='n'>7.9 ms</td><td class='n'>负</td></tr><tr><td>深度 1</td><td class='n'>5</td><td>红</td><td class='n'>87</td><td class='n'>11</td><td class='n'>5.6 ms</td><td class='n'>负</td></tr><tr><td>深度 1</td><td class='n'>6</td><td>黑</td><td class='n'>62</td><td class='n'>8</td><td class='n'>6.1 ms</td><td class='n'>负</td></tr><tr><td>深度 1</td><td class='n'>7</td><td>红</td><td class='n'>125</td><td class='n'>17</td><td class='n'>3.6 ms</td><td class='n'>负</td></tr><tr><td>深度 1</td><td class='n'>8</td><td>黑</td><td class='n'>28</td><td class='n'>5</td><td class='n'>5.4 ms</td><td class='n'>负</td></tr><tr><td>每步 100 ms</td><td class='n'>1</td><td>红</td><td class='n'>13</td><td class='n'>1</td><td class='n'>26.8 ms</td><td class='n'>负</td></tr><tr><td>每步 100 ms</td><td class='n'>2</td><td>黑</td><td class='n'>34</td><td class='n'>3</td><td class='n'>6.4 ms</td><td class='n'>负</td></tr><tr><td>每步 100 ms</td><td class='n'>3</td><td>红</td><td class='n'>53</td><td class='n'>8</td><td class='n'>6.5 ms</td><td class='n'>负</td></tr><tr><td>每步 100 ms</td><td class='n'>4</td><td>黑</td><td class='n'>38</td><td class='n'>7</td><td class='n'>4.9 ms</td><td class='n'>负</td></tr><tr><td>每步 100 ms</td><td class='n'>5</td><td>红</td><td class='n'>35</td><td class='n'>7</td><td class='n'>7.1 ms</td><td class='n'>负</td></tr><tr><td>每步 100 ms</td><td class='n'>6</td><td>黑</td><td class='n'>42</td><td class='n'>5</td><td class='n'>4.9 ms</td><td class='n'>负</td></tr><tr><td>每步 100 ms</td><td class='n'>7</td><td>红</td><td class='n'>29</td><td class='n'>7</td><td class='n'>4.5 ms</td><td class='n'>负</td></tr><tr><td>每步 100 ms</td><td class='n'>8</td><td>黑</td><td class='n'>58</td><td class='n'>12</td><td class='n'>4.3 ms</td><td class='n'>负</td></tr></tbody>
+  </table>
+
+  <h2>五、结论</h2>
+  <div class="card">
+    <ul>
+      <li>四档合计 32 局、0 胜 2 和 30 负；
+      200 节点档平均 56.2 手，1000 节点档平均 41.2 手。</li>
+      <li>动态分支树把最弱档的对抗从平均 47 手延长到 56.2 手，深度 1 档出现 2 局和棋；
+      但胜场仍为 0，说明“宽束两层的战术校验”只是延缓败局，不足以逆转。</li>
+      <li>败因集中在战术层：没有搜索意味着吃子交换、将军与反将都不会预演，十几手之后就会连续丢子，平均每局被吃 7 个子。</li>
+      <li>几何路由的判分能力（留出集 R² 0.21、三类 71.2%）只说明“形势判断比随机好”，
+      不足以替代一层以上的战术校验；这正是本次测评给出的最硬结论。</li>
+      <li>若要在不引入 α-β 搜索的前提下提升，务实的方向是给候选着法加一层“吃子与将军的即时校验分支”，
+      即在激活树里增加战术叶子，而不是继续堆几何维度。</li>
+      <li>参照引擎属于当代最强开源象棋引擎之一，200 节点已足以碾压入门级程序，因此 0 胜并不意外；
+      该结果可作为“无搜索几何引擎”当前棋力上限的基线记录。</li>
+    </ul>
+  </div>
+  <p class="note">测评脚本 match_pikafish.py；原始对局数据 data/pikafish_match_*.json。Pikafish 采用 GPL-3.0 许可，仅用于本地测评。</p>
+</main>
+</html>

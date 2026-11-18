@@ -1,0 +1,43 @@
+# 数据集与训练缓存（体积大，不进入 Git）
+/data/
+*.npy
+*.npz
+
+# 第三方引擎、工具链、构建输出
+/pikafish/
+/tools/
+/dist/
+/paper_work/
+/.tmpbuild2/
+/.workbuddy/
+/build/
+/out/
+
+# 编译中间文件
+*.o
+*.obj
+*.a
+*.lib
+*.pdb
+*.ilk
+*.exp
+*.class
+*.pyc
+__pycache__/
+node_modules/
+.venv/
+venv/
+
+# 临时文件、日志与归档
+*.log
+*.tmp
+*.bak
+*.zip
+*.7z
+*.tar
+*.tar.gz
+
+# 编辑器
+.vscode/
+.idea/
+*.swp

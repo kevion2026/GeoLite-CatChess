@@ -1,0 +1,1373 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CatChess V1.0-pro · 几何评估象棋引擎</title>
+<style>
+  :root{
+    --bg:#0b0d10; --bg2:#0f1216; --panel:#13171d; --panel2:#171c23;
+    --line:#232a33; --line2:#2e3743;
+    --text:#e2e7ee; --dim:#8894a4; --dim2:#5f6b7a;
+    --red:#d4553a; --red2:#e8765c; --gold:#c9a227; --gold2:#e2c05a;
+    --teal:#3fb8a0; --blue:#5b9bd5;
+    --mono:"SF Mono","Cascadia Mono","JetBrains Mono",Consolas,"Courier New",monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:
+      radial-gradient(1200px 700px at 50% -10%, #151b23 0%, transparent 60%),
+      repeating-linear-gradient(0deg, transparent 0 39px, rgba(255,255,255,.012) 39px 40px),
+      repeating-linear-gradient(90deg, transparent 0 39px, rgba(255,255,255,.012) 39px 40px),
+      var(--bg);
+    color:var(--text); font-family:var(--sans); font-size:13px;
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  .app{max-width:1560px; margin:0 auto; padding:16px 20px 20px; display:flex; flex-direction:column; gap:14px; min-height:100vh}
+
+  /* ---------- 顶栏 ---------- */
+  .topbar{display:flex; align-items:center; gap:14px; padding:2px 2px 0}
+  .logo{width:38px;height:38px;flex:0 0 auto}
+  .brand{display:flex; flex-direction:column; gap:1px}
+  .brand h1{margin:0; font-size:17px; font-weight:650; letter-spacing:.2px; display:flex; align-items:center; gap:9px}
+  .brand h1 em{font-style:normal; font-size:11px; font-weight:500; color:var(--gold); border:1px solid rgba(201,162,39,.35);
+    background:rgba(201,162,39,.08); padding:2px 7px; border-radius:4px; letter-spacing:.08em}
+  .brand p{margin:0; font-size:11.5px; color:var(--dim2); letter-spacing:.04em}
+  .top-right{margin-left:auto; display:flex; align-items:center; gap:16px}
+  .pill{display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--dim);
+    border:1px solid var(--line); background:var(--panel); padding:6px 11px; border-radius:999px}
+  .dot{width:7px;height:7px;border-radius:50%; background:var(--dim2); transition:.25s}
+  .dot.ok{background:var(--teal); box-shadow:0 0 0 3px rgba(63,184,160,.14)}
+  .dot.bad{background:var(--red); box-shadow:0 0 0 3px rgba(212,85,58,.14)}
+  .dot.busy{background:var(--gold); animation:pulse 1.1s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  /* ---------- 三栏 ---------- */
+  .stage{display:grid; grid-template-columns:264px minmax(360px,1fr) 334px; gap:14px; align-items:start}
+  .col{display:flex; flex-direction:column; gap:12px}
+  @media(max-width:1240px){
+    .stage{grid-template-columns:250px minmax(340px,1fr)}
+    .right{grid-column:1 / -1; flex-direction:row; flex-wrap:wrap}
+    .right .card{flex:1 1 300px}
+  }
+  @media(max-width:820px){
+    .stage{grid-template-columns:1fr}
+    .right{flex-direction:column}
+  }
+
+  /* ---------- 卡片 ---------- */
+  .card{background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--line);
+    border-radius:11px; padding:12px 13px 13px; position:relative; overflow:hidden}
+  .card::before{content:""; position:absolute; inset:0 0 auto 0; height:1px;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent)}
+  .hd{display:flex; align-items:center; gap:8px; font-size:11px; letter-spacing:.13em; color:var(--dim);
+    text-transform:uppercase; margin-bottom:11px}
+  .hd::before{content:""; width:2px; height:11px; border-radius:1px; background:var(--red)}
+  .hd .tag{margin-left:auto; font-size:9.5px; letter-spacing:.06em; color:var(--dim2);
+    border:1px solid var(--line2); border-radius:3px; padding:2px 5px; text-transform:none}
+
+  .kv{display:flex; align-items:baseline; gap:8px; padding:4.5px 0; font-size:12px; color:var(--dim)}
+  .kv b{margin-left:auto; font-weight:500; color:var(--text); font-family:var(--mono); font-size:11px;
+    max-width:72%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:right}
+  .kv b.ok{color:var(--teal)} .kv b.bad{color:var(--red2)}
+  .kv em{font-style:normal; font-size:9.5px; color:var(--dim2); margin-left:2px}
+
+  /* ---------- 控件 ---------- */
+  .row{display:flex; align-items:center; gap:8px; margin-bottom:9px}
+  .row label{font-size:11.5px; color:var(--dim); width:38px; flex:0 0 auto}
+  .seg{display:flex; background:#0d1116; border:1px solid var(--line); border-radius:7px; padding:2px; gap:2px; flex:1}
+  .seg button{flex:1; border:0; background:transparent; color:var(--dim); font-family:var(--sans); font-size:11.5px;
+    padding:5px 2px; border-radius:5px; cursor:pointer; transition:.15s; white-space:nowrap}
+  .seg button:hover{color:var(--text); background:rgba(255,255,255,.04)}
+  .seg button.on{background:linear-gradient(180deg,#2a323d,#232a34); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,.4)}
+  .seg button.on.acc{background:linear-gradient(180deg,rgba(212,85,58,.9),rgba(178,63,40,.9)); color:#fff}
+  .btns{display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:11px}
+  button.btn{border:1px solid var(--line2); background:linear-gradient(180deg,#1c2229,#161b21); color:var(--text);
+    font-family:var(--sans); font-size:12px; padding:7px 6px; border-radius:7px; cursor:pointer; transition:.15s}
+  button.btn:hover{border-color:#3d4756; background:linear-gradient(180deg,#232b34,#1b2129)}
+  button.btn:active{transform:translateY(1px)}
+  button.btn:disabled{opacity:.35; cursor:not-allowed; transform:none}
+  button.btn.accent{border-color:rgba(212,85,58,.5); background:linear-gradient(180deg,rgba(212,85,58,.22),rgba(212,85,58,.1)); color:#f0b7a6}
+  button.btn.wide{width:100%}
+
+  /* ---------- 棋盘区 ---------- */
+  .boardcol{display:flex; flex-direction:column; gap:10px; min-width:0}
+  .boardhead{display:flex; align-items:center; gap:9px; padding:0 3px; font-size:12px; color:var(--dim)}
+  .boardhead .side{margin-left:auto; display:flex; align-items:center; gap:7px}
+  .badge{font-size:10.5px; padding:3px 8px; border-radius:999px; border:1px solid var(--line2); color:var(--dim2);
+    background:#0e1217; letter-spacing:.03em}
+  .badge.on{color:var(--gold2); border-color:rgba(201,162,39,.4); background:rgba(201,162,39,.08)}
+  .boardbox{position:relative; margin:0 auto; width:min(100%, calc((100vh - 300px) * 0.9074)); aspect-ratio:9.8/10.8; border-radius:12px; overflow:hidden;
+    border:1px solid #2b2418; box-shadow:0 18px 46px -18px rgba(0,0,0,.9), 0 0 0 1px rgba(0,0,0,.5) inset;
+    background:#20242a}
+  #board{display:block; width:100%; height:100%; cursor:pointer; touch-action:manipulation}
+
+  .evalwrap{display:flex; align-items:center; gap:9px; padding:0 2px}
+  .evalbar{flex:1; height:6px; border-radius:3px; background:#171d24; overflow:hidden; position:relative;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.04)}
+  .evalfill{position:absolute; left:50%; top:0; bottom:0; width:0; background:linear-gradient(90deg,rgba(212,85,58,.55),rgba(212,85,58,.95));
+    transition:left .3s, width .3s}
+  .evalfill.neg{background:linear-gradient(90deg,rgba(63,184,160,.95),rgba(63,184,160,.55))}
+  .evalnum{font-family:var(--mono); font-size:12px; min-width:52px; text-align:right; color:var(--dim)}
+  .evalnum b{color:var(--text); font-weight:600}
+
+  .moves{display:grid; grid-template-columns:auto 1fr 1fr; gap:1px 0; font-family:var(--mono); font-size:11.5px;
+    flex:0 0 auto; min-height:30px; max-height:108px; overflow-y:auto;
+    border:1px solid var(--line); border-radius:8px; background:#0d1116}
+  .moves .idx{color:var(--dim2); padding:3px 8px; text-align:right; border-right:1px solid var(--line); font-size:10.5px}
+  .moves .mv{padding:3px 9px; color:#cfd6df; border-bottom:1px solid rgba(255,255,255,.03)}
+  .moves .mv.red{color:#f0a58f} .moves .mv.cur{background:rgba(201,162,39,.12); color:var(--gold2)}
+  .moves .empty{grid-column:1/-1; color:var(--dim2); padding:9px; text-align:center; font-size:11px}
+
+  /* ---------- 遥测 ---------- */
+  .stats{display:grid; grid-template-columns:1fr 1fr; gap:7px}
+  .stat{background:#0e1218; border:1px solid var(--line); border-radius:8px; padding:7px 9px 6px}
+  .stat b{display:block; font-family:var(--mono); font-size:17px; font-weight:600; letter-spacing:-.3px; line-height:1.25}
+  .stat span{font-size:10px; color:var(--dim2); letter-spacing:.08em; text-transform:uppercase}
+  .stat.hl b{color:var(--gold2)}
+
+  .spark{width:100%; height:52px; display:block; margin-top:9px; overflow:visible}
+  .spark .grid{stroke:rgba(255,255,255,.05); stroke-width:1}
+  .spark polyline{fill:none; stroke:var(--gold); stroke-width:1.6; stroke-linejoin:round; stroke-linecap:round}
+  .spark .area{fill:url(#sg); stroke:none}
+
+  .fusion{margin-top:11px}
+  .fbar{display:flex; height:20px; border-radius:6px; overflow:hidden; border:1px solid var(--line); font-size:9.5px}
+  .fbar div{display:flex; align-items:center; justify-content:center; white-space:nowrap; letter-spacing:.03em}
+  .fbar .geo{width:65%; background:linear-gradient(180deg,rgba(212,85,58,.75),rgba(178,63,40,.6)); color:#ffd9cd}
+  .fbar .plane{width:35%; background:linear-gradient(180deg,rgba(91,155,213,.55),rgba(60,110,160,.45)); color:#cfe4fa}
+  .fnote{font-size:10.5px; color:var(--dim2); margin-top:6px; line-height:1.5; font-family:var(--mono)}
+
+  /* ---------- 几何 ---------- */
+  .spaces{display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px}
+  .space{background:#0a0e12; border:1px solid var(--line); border-radius:7px; padding:5px 4px 3px; text-align:center}
+  .space canvas{width:100%; height:74px; display:block}
+  .space span{display:block; font-size:9.5px; color:var(--dim2); letter-spacing:.06em; margin-top:2px}
+  .space b{font-family:var(--mono); font-size:10.5px; color:var(--dim); font-weight:400}
+
+  #experts{width:100%; height:56px; display:block; margin-top:2px}
+  .explist{display:flex; gap:3px; margin-top:8px}
+  .explist .exchip{flex:1}
+  .exchip{font-family:var(--mono); font-size:9.5px; padding:1px 3px; border-radius:4px; text-align:center;
+    background:rgba(201,162,39,.1); border:1px solid rgba(201,162,39,.28); color:var(--gold2); white-space:nowrap}
+  .exchip i{font-style:normal; color:var(--dim2); margin-left:4px}
+
+  /* ---------- 底部 ---------- */
+  footer{margin-top:auto; display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:10.5px; color:var(--dim2);
+    border-top:1px solid var(--line); padding-top:11px; font-family:var(--mono); line-height:1.7}
+  footer .sep{color:#2c343f}
+  footer .hl{color:var(--dim)}
+  .hintline{font-size:11px; color:var(--dim2); line-height:1.6}
+  .mono{font-family:var(--mono)}
+  .small{font-size:11px}
+  .toast{position:fixed; left:50%; bottom:26px; transform:translate(-50%,20px); opacity:0; pointer-events:none;
+    background:#1b2129; border:1px solid var(--line2); color:var(--text); font-size:12px; padding:9px 16px;
+    border-radius:9px; box-shadow:0 10px 30px rgba(0,0,0,.6); transition:.24s; z-index:99}
+  .toast.show{opacity:1; transform:translate(-50%,0)}
+  /* ---------- 模型修改弹窗 ---------- */
+  .modal{position:fixed; inset:0; z-index:120; display:none; align-items:center; justify-content:center;
+    background:rgba(4,6,9,.72); backdrop-filter:blur(3px)}
+  .modal.show{display:flex}
+  .modal-card{width:min(92vw,460px); background:linear-gradient(180deg,var(--panel2),var(--panel));
+    border:1px solid var(--line2); border-radius:12px; padding:16px 17px 15px;
+    box-shadow:0 24px 70px rgba(0,0,0,.72)}
+  .modal-hd{display:flex; align-items:center; gap:9px; margin-bottom:10px; font-size:13px; font-weight:600}
+  .modal-hd::before{content:""; width:2px; height:13px; border-radius:1px; background:var(--gold)}
+  .modal-hd .x{margin-left:auto; width:26px; height:26px; border:1px solid var(--line2); border-radius:6px;
+    background:#0d1116; color:var(--dim); cursor:pointer; font-size:15px; line-height:1}
+  .modal-hd .x:hover{color:var(--text); border-color:#46515f}
+  .model-select{width:100%; margin-top:7px; padding:8px 9px; border-radius:7px; border:1px solid var(--line2);
+    background:#0d1116; color:var(--text); font-family:var(--mono); font-size:11.5px; outline:none}
+  .model-select:focus{border-color:rgba(201,162,39,.55)}
+  .model-path{margin-top:8px; color:var(--dim2); font-size:10.5px; line-height:1.55; word-break:break-all}
+  .modal-actions{display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:13px}
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-thumb{background:#2a323c; border-radius:4px}
+  ::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <svg class="logo" viewBox="0 0 40 40" fill="none">
+      <path d="M20 3.5 34 11v18L20 36.5 6 29V11z" stroke="#3a4452" stroke-width="1.1"/>
+      <path d="M13.6 14.2 13 11l5.2 2.6h3.6L27 11l-.6 3.2c1.6 1.7 2.5 3.9 2.5 6.3 0 5.4-4 9.4-8.9 9.4s-8.9-4-8.9-9.4c0-2.4.9-4.6 2.5-6.3z"
+        stroke="#d4553a" stroke-width="1.5" stroke-linejoin="round"/>
+      <circle cx="16.4" cy="21" r="1.35" fill="#e2c05a"/><circle cx="23.6" cy="21" r="1.35" fill="#e2c05a"/>
+      <path d="M17.6 25.6c.8.7 1.6 1 2.4 1s1.6-.3 2.4-1" stroke="#8894a4" stroke-width="1.2" stroke-linecap="round"/>
+      <path d="M20 3.5V1M20 39v-2.5" stroke="#3a4452" stroke-width="1"/>
+    </svg>
+    <div class="brand">
+      <h1>CatChess <em>V1.0-pro</em></h1>
+      <p>几何评估象棋引擎 · 三空间点云 · MLP 192/96 价值头</p>
+    </div>
+    <div class="top-right">
+      <div class="pill"><span class="dot" id="dotEngine"></span><span id="pillEngine">正在连接引擎…</span></div>
+      <div class="pill mono" id="pillVer" style="font-size:10.5px">UCI 子集</div>
+    </div>
+  </header>
+
+  <main class="stage">
+
+    <!-- ============ 左栏 ============ -->
+    <div class="col left">
+      <div class="card">
+        <div class="hd">对局</div>
+        <div class="row">
+          <label>执子</label>
+          <div class="seg" id="segSide">
+            <button data-v="1" class="on acc">执红先行</button>
+            <button data-v="-1">执黑后行</button>
+          </div>
+        </div>
+        <div class="row">
+          <label>思考</label>
+          <div class="seg" id="segTime">
+            <button data-v="200">0.2s</button>
+            <button data-v="600" class="on">0.6s</button>
+            <button data-v="1200">1.2s</button>
+            <button data-v="2500">2.5s</button>
+          </div>
+        </div>
+        <div class="btns">
+          <button class="btn accent" id="btnNew">新 局</button>
+          <button class="btn" id="btnUndo">悔 棋</button>
+          <button class="btn" id="btnHint">提 示</button>
+          <button class="btn" id="btnFlip">翻转棋盘</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd">引擎</div>
+        <div class="kv"><span>状态</span><b id="engState" class="bad">未连接</b></div>
+        <div class="kv"><span>标识</span><b id="engName">—</b></div>
+        <div class="kv"><span>模型</span><b id="engModel">—</b></div>
+        <div class="kv"><span>作者</span><b>GeoLite / CatChess</b></div>
+        <div class="kv"><span>进程</span><b id="engExe" class="mono" style="font-size:9.5px" title="">—</b></div>
+        <button class="btn wide" id="btnModel" style="margin-top:9px">模型修改</button>
+      </div>
+
+      <div class="card">
+        <div class="hd">规则自检</div>
+        <div class="hintline">用引擎内置 perft 交叉校验前端的走法生成，左右两侧必须完全一致。</div>
+        <button class="btn wide" id="btnPerft" style="margin-top:9px">运行 perft(3)</button>
+        <div id="perftOut" class="mono small" style="margin-top:8px; color:var(--dim2); line-height:1.7"></div>
+      </div>
+    </div>
+
+    <!-- ============ 中栏 ============ -->
+    <div class="boardcol">
+      <div class="boardhead">
+        <span id="turnText" style="color:var(--text);font-weight:500">红方走子</span>
+        <span class="badge" id="checkBadge" style="display:none">将 军</span>
+        <div class="side">
+          <span class="badge" id="moveBadge">第 1 手</span>
+          <span class="badge" id="thinkBadge">待 机</span>
+        </div>
+      </div>
+
+      <div class="boardbox"><canvas id="board"></canvas></div>
+
+      <div class="evalwrap">
+        <span class="mono small" style="color:var(--dim2)">黑</span>
+        <div class="evalbar"><div class="evalfill" id="evalFill"></div></div>
+        <span class="mono small" style="color:var(--dim2)">红</span>
+        <span class="evalnum" id="evalNum"><b>0</b> cp</span>
+      </div>
+
+      <div class="moves" id="moveList"><div class="empty">尚未落子</div></div>
+    </div>
+
+    <!-- ============ 右栏 ============ -->
+    <div class="col right">
+      <div class="card">
+        <div class="hd">搜索遥测<span class="tag">UCI info</span></div>
+        <div class="stats">
+          <div class="stat hl"><b id="sScore">—</b><span>评分 cp</span></div>
+          <div class="stat"><b id="sDepth">—</b><span>深度</span></div>
+          <div class="stat"><b id="sNps">—</b><span>nps</span></div>
+          <div class="stat"><b id="sNodes">—</b><span>节点</span></div>
+        </div>
+        <svg class="spark" id="spark" viewBox="0 0 300 52" preserveAspectRatio="none">
+          <defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgba(201,162,39,.28)"/><stop offset="100%" stop-color="rgba(201,162,39,0)"/>
+          </linearGradient></defs>
+          <line class="grid" x1="0" y1="26" x2="300" y2="26"/>
+          <line class="grid" x1="0" y1="12" x2="300" y2="12" stroke="rgba(255,255,255,.03)"/>
+          <line class="grid" x1="0" y1="40" x2="300" y2="40" stroke="rgba(255,255,255,.03)"/>
+          <polygon class="area" id="sparkArea" points=""/>
+          <polyline id="sparkLine" points=""/>
+        </svg>
+        <div class="fusion">
+          <div class="fbar"><div class="geo">几何树 65%</div><div class="plane">平面 35%</div></div>
+          <div class="fnote">final = (65·tree + 35·plane) / 100</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd">几何三空间<span class="tag">浏览器复算</span></div>
+        <div class="spaces">
+          <div class="space"><canvas id="sp0"></canvas><span>near 邻域</span><b id="st0">—</b></div>
+          <div class="space"><canvas id="sp1"></canvas><span>line 共线</span><b id="st1">—</b></div>
+          <div class="space"><canvas id="sp2"></canvas><span>mid 同兵种</span><b id="st2">—</b></div>
+        </div>
+        <div class="kv" style="margin-top:8px"><span>45 维树分 <em>红+</em></span><b id="geoScore">—</b></div>
+        <div class="kv"><span>引擎融合分 <em>红+</em></span><b id="engScore">—</b></div>
+        <div class="kv"><span>令牌 / 覆盖</span><b id="geoTok">—</b></div>
+      </div>
+
+      <div class="card">
+        <div class="hd">64 专家激活<span class="tag">RBF 门控</span></div>
+        <canvas id="experts"></canvas>
+        <div class="explist" id="exTop"><span style="color:var(--dim2);font-size:10.5px">等待局面…</span></div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <span class="hl">token → 三空间坐标 → 21 维状态 + 9 形 + 9 子力 + 6 威胁 = 45 维</span>
+    <span class="sep">/</span>
+    <span>64 专家 RBF（h=3.5 × scale 2.5，λ=1.0）</span>
+    <span class="sep">/</span>
+    <span id="footState">静态页面可直接浏览，对弈需本地服务</span>
+  </footer>
+</div>
+
+<div class="modal" id="modelModal" aria-hidden="true">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modelTitle">
+    <div class="modal-hd" id="modelTitle">模型修改<button class="x" id="btnModelClose" title="关闭">×</button></div>
+    <div class="hintline">模型权重编译在引擎内，切换模型会重启对应的 UCI 进程。当前棋局保留，置换表清空。</div>
+    <select class="model-select" id="modelSelect"></select>
+    <div class="model-path" id="modelPath">正在读取本地模型…</div>
+    <div class="modal-actions">
+      <button class="btn" id="btnModelRefresh">刷新列表</button>
+      <button class="btn accent" id="btnModelApply">应用并重启</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="xq_rules.js"></script>
+<script src="geo_model.js"></script>
+<script src="geo_browser.js"></script>
+<script>
+/* =====================================================================
+ *  CatChess V1.0-pro 前端
+ *  1) 完整象棋规则（走法生成 / 将军判定 / 记谱）
+ *  2) 通过本地 HTTP 服务驱动 UCI 引擎
+ *  3) 浏览器侧复算 45 维几何特征与 64 专家门控，用于可视化
+ * ===================================================================== */
+"use strict";
+
+/* 任何未捕获的脚本错误都冒个提示，避免界面看起来"没反应"却无处排查 */
+window.__errs = [];
+window.addEventListener("error", (e) => {
+  window.__errs.push(String(e.message));
+  try { toast("脚本错误：" + e.message); } catch (_) {}
+});
+
+const X = window.XQ;
+const {
+  KING, ADVISOR, ELEPHANT, HORSE, ROOK, CANNON, PAWN, RED, BLACK, W,
+  START_FEN, ORTHO, HORSE_MV, NAMES, CN_NUM,
+  sqOf, inBoard, fx, fy,
+  parseFen, toFen, genPseudo, kingSq, attacked, inCheck, legalMoves,
+  cnName, fileText, moveText, uciOf, parseUci
+} = X;
+
+/* ---------------------------------------------------------------- 几何复算 */
+const G = window.GEO_MODEL || null;
+const GEOC = window.GEOC || {};
+const { feats45, treeScore45 } = GEOC;
+
+/* ---------------------------------------------------------------- 状态 */
+const S = {
+  board: null, side: RED,
+  history: [],           // {mv, text, side, board(快照)}
+  lastMove: null,
+  selected: -1,
+  legalForSel: [],
+  playerSide: RED,
+  ms: 600,
+  flip: false,
+  busy: false,
+  over: null,
+  hint: null,
+  infoHist: [],
+  geo: null,
+  searchSide: RED,
+  listening: false,
+  fenHist: []
+};
+
+function resetState(side) {
+  const { b, side: sd } = parseFen(START_FEN);
+  S.board = b; S.side = sd;
+  S.history = []; S.lastMove = null; S.selected = -1; S.legalForSel = [];
+  S.over = null; S.hint = null; S.infoHist = []; S.anim = null;
+  S.fenHist = [toFen(b, sd)];
+  S.busy = false; S.listening = false; S.gen = (S.gen || 0) + 1;
+  S.playerSide = side;
+  S.flip = side === BLACK;
+  renderAll();
+  if (S.side !== S.playerSide) scheduleEngineMove();
+}
+
+/* ---------------------------------------------------------------- 绘制 */
+const cv = document.getElementById("board");
+const ctx = cv.getContext("2d");
+let CS = { w: 0, h: 0, cell: 40, ox: 0, oy: 0 };
+
+function fitCanvas(canvas) {
+  const r = canvas.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
+  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+  }
+  const c = canvas.getContext("2d");
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { w, h, c };
+}
+
+function measure() {
+  const r = cv.getBoundingClientRect();
+  const cell = Math.min(r.width / 9.8, r.height / 10.8);
+  CS = { w: r.width, h: r.height, cell, ox: (r.width - 8 * cell) / 2, oy: (r.height - 9 * cell) / 2 };
+}
+const px = (x, y) => [CS.ox + (S.flip ? 8 - x : x) * CS.cell, CS.oy + (S.flip ? 9 - y : y) * CS.cell];
+function pickCell(clientX, clientY) {
+  const r = cv.getBoundingClientRect();
+  const lx = clientX - r.left, ly = clientY - r.top;
+  let vx = Math.round((lx - CS.ox) / CS.cell), vy = Math.round((ly - CS.oy) / CS.cell);
+  if (vx < 0 || vx > 8 || vy < 0 || vy > 9) return -1;
+  const x = S.flip ? 8 - vx : vx, y = S.flip ? 9 - vy : vy;
+  return sqOf(x, y);
+}
+
+let noisePattern = null;
+function makeNoise(c) {
+  const n = document.createElement("canvas");
+  n.width = n.height = 96;
+  const nc = n.getContext("2d");
+  const img = nc.createImageData(96, 96);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = 200 + Math.random() * 55;
+    img.data[i] = v; img.data[i + 1] = v * 0.97; img.data[i + 2] = v * 0.9; img.data[i + 3] = 12;
+  }
+  nc.putImageData(img, 0, 0);
+  return c.createPattern(n, "repeat");
+}
+
+function drawBoard() {
+  const { c } = fitCanvas(cv);
+  measure();
+  const { w, h, cell, ox, oy } = CS;
+  c.clearRect(0, 0, w, h);
+
+  // 底色：木纹渐变
+  const g = c.createLinearGradient(0, 0, w * 0.6, h);
+  g.addColorStop(0, "#e8d3ac");
+  g.addColorStop(0.45, "#e2cba1");
+  g.addColorStop(1, "#d8bf93");
+  c.fillStyle = g;
+  c.fillRect(0, 0, w, h);
+
+  if (!noisePattern) noisePattern = makeNoise(c);
+  c.save();
+  c.globalAlpha = 0.55;
+  c.fillStyle = noisePattern;
+  c.fillRect(0, 0, w, h);
+  c.restore();
+
+  // 暗角
+  const vg = c.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.22, w / 2, h / 2, Math.max(w, h) * 0.78);
+  vg.addColorStop(0, "rgba(255,240,210,0.16)");
+  vg.addColorStop(0.62, "rgba(120,86,44,0)");
+  vg.addColorStop(1, "rgba(78,52,22,0.30)");
+  c.fillStyle = vg;
+  c.fillRect(0, 0, w, h);
+
+  // 外框
+  c.strokeStyle = "#6b4f28";
+  c.lineWidth = Math.max(1.4, cell * 0.045);
+  c.strokeRect(ox - cell * 0.58, oy - cell * 0.58, 8 * cell + cell * 1.16, 9 * cell + cell * 1.16);
+
+  c.strokeStyle = "#7d5e33";
+  c.lineWidth = Math.max(0.8, cell * 0.022);
+  c.beginPath();
+  // 竖线（河界处断开，边线贯通）
+  for (let x = 0; x < 9; x++) {
+    if (x === 0 || x === 8) {
+      const [x0, y0] = px(x, 0), [, y1] = px(x, 9);
+      c.moveTo(x0, y0); c.lineTo(x0, y1);
+    } else {
+      let [x0, y0] = px(x, 0), [, y1] = px(x, 4);
+      c.moveTo(x0, y0); c.lineTo(x0, y1);
+      [, y0] = px(x, 5); [, y1] = px(x, 9);
+      c.moveTo(x0, y0); c.lineTo(x0, y1);
+    }
+  }
+  // 横线
+  for (let y = 0; y < 10; y++) {
+    const [x0, y0] = px(0, y), [x1] = px(8, y);
+    c.moveTo(x0, y0); c.lineTo(x1, y0);
+  }
+  // 九宫
+  for (const yy of [0, 7]) {
+    let p1 = px(3, yy), p2 = px(5, yy + 2);
+    c.moveTo(p1[0], p1[1]); c.lineTo(p2[0], p2[1]);
+    p1 = px(5, yy); p2 = px(3, yy + 2);
+    c.moveTo(p1[0], p1[1]); c.lineTo(p2[0], p2[1]);
+  }
+  c.stroke();
+
+  // 兵炮位标记
+  c.strokeStyle = "rgba(109,80,42,0.55)";
+  c.lineWidth = Math.max(0.9, cell * 0.019);
+  const marks = [[1, 2], [7, 2], [0, 3], [2, 3], [4, 3], [6, 3], [8, 3],
+                 [0, 6], [2, 6], [4, 6], [6, 6], [8, 6], [1, 7], [7, 7]];
+  const d = cell * 0.2, gap = cell * 0.13;
+  for (const [mx, my] of marks) {
+    const [cx0, cy0] = px(mx, my);
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      if (mx === 0 && sx < 0) continue;
+      if (mx === 8 && sx > 0) continue;
+      c.beginPath();
+      c.moveTo(cx0 + sx * gap, cy0 + sy * (gap + d));
+      c.lineTo(cx0 + sx * gap, cy0 + sy * gap);
+      c.lineTo(cx0 + sx * (gap + d), cy0 + sy * gap);
+      c.stroke();
+    }
+  }
+
+  // 河界
+  c.save();
+  c.fillStyle = "rgba(122,92,50,0.52)";
+  c.font = `600 ${cell * 0.44}px "Kaiti SC","STKaiti",KaiTi,"楷体",serif`;
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  const [rx, ry] = px(2, 4.5), [lx, ly] = px(6, 4.5);
+  if (!S.flip) {
+    c.fillText("楚  河", rx, ry); c.fillText("汉  界", lx, ly);
+  } else {
+    c.fillText("汉  界", rx, ry); c.fillText("楚  河", lx, ly);
+  }
+  c.restore();
+
+  // 上一步标记
+  if (S.lastMove) {
+    for (const [sq, alpha] of [[S.lastMove.f, 0.9], [S.lastMove.t, 1]]) {
+      const [cx0, cy0] = px(fx(sq), fy(sq));
+      c.save();
+      c.strokeStyle = `rgba(190,140,40,${alpha * 0.75})`;
+      c.lineWidth = Math.max(1.6, cell * 0.045);
+      const r = cell * 0.44;
+      c.strokeRect(cx0 - r, cy0 - r, r * 2, r * 2);
+      c.restore();
+    }
+  }
+
+  // 提示
+  if (S.hint) {
+    const [hx, hy] = px(fx(S.hint.t), fy(S.hint.t));
+    c.save();
+    c.strokeStyle = "rgba(63,184,160,0.9)";
+    c.lineWidth = Math.max(2, cell * 0.055);
+    c.setLineDash([cell * 0.14, cell * 0.1]);
+    c.beginPath();
+    c.arc(hx, hy, cell * 0.46, 0, Math.PI * 2);
+    c.stroke();
+    c.restore();
+  }
+
+  // 棋子
+  for (let s = 0; s < 90; s++) {
+    const p = S.board[s];
+    if (!p) continue;
+    if (S.anim && s === S.anim.t) continue;   // 动画中的子单独画
+    drawPiece(c, fx(s), fy(s), p, s === S.selected);
+  }
+  if (S.anim) {
+    const a = S.anim;
+    const k = Math.min(1, (performance.now() - a.t0) / a.dur);
+    const e = 1 - Math.pow(1 - k, 3);
+    const vx0 = S.flip ? 8 - a.fx : a.fx, vy0 = S.flip ? 9 - a.fy : a.fy;
+    const vx1 = S.flip ? 8 - a.tx : a.tx, vy1 = S.flip ? 9 - a.ty : a.ty;
+    drawPieceAt(c, CS.ox + (vx0 + (vx1 - vx0) * e) * cell, CS.oy + (vy0 + (vy1 - vy0) * e) * cell, a.p, false, 1 + 0.08 * Math.sin(Math.PI * k));
+  }
+
+  // 可落点
+  if (S.selected >= 0) {
+    for (const mv of S.legalForSel) {
+      const t = mv % 100;
+      const [tx, ty] = px(fx(t), fy(t));
+      const isCap = !!S.board[t];
+      c.save();
+      if (isCap) {
+        c.strokeStyle = "rgba(178,52,32,0.75)";
+        c.lineWidth = Math.max(2, cell * 0.05);
+        c.beginPath();
+        c.arc(tx, ty, cell * 0.47, 0, Math.PI * 2);
+        c.stroke();
+      } else {
+        c.fillStyle = "rgba(60,44,20,0.35)";
+        c.beginPath();
+        c.arc(tx, ty, cell * 0.11, 0, Math.PI * 2);
+        c.fill();
+      }
+      c.restore();
+    }
+  }
+
+  // 将军脉冲
+  if (!S.over && inCheck(S.board, S.side)) {
+    const k = kingSq(S.board, S.side);
+    if (k >= 0) {
+      const [kx, ky] = px(fx(k), fy(k));
+      const ph = (Math.sin(performance.now() / 320) + 1) / 2;
+      c.save();
+      c.strokeStyle = `rgba(200,40,30,${0.35 + 0.5 * ph})`;
+      c.lineWidth = Math.max(1.5, cell * 0.05);
+      c.beginPath();
+      c.arc(kx, ky, cell * (0.47 + 0.06 * ph), 0, Math.PI * 2);
+      c.stroke();
+      c.restore();
+    }
+  }
+}
+
+function drawPiece(c, x, y, p, selected) {
+  const [sx, sy] = px(x, y);
+  drawPieceAt(c, sx, sy, p, selected, 1);
+}
+
+function drawPieceAt(c, sx, sy, p, selected, scale) {
+  const cell = CS.cell;
+  const r = cell * 0.435 * scale;
+  const isRed = p > 0;
+  c.save();
+  c.shadowColor = "rgba(48,30,10,0.42)";
+  c.shadowBlur = cell * 0.14;
+  c.shadowOffsetY = cell * 0.055;
+
+  const grad = c.createRadialGradient(sx - r * 0.34, sy - r * 0.4, r * 0.12, sx, sy, r * 1.02);
+  grad.addColorStop(0, isRed ? "#fdf2dd" : "#f2ecdf");
+  grad.addColorStop(0.55, isRed ? "#f2ddbe" : "#e6ddc8");
+  grad.addColorStop(1, isRed ? "#e2c49b" : "#d4c9b0");
+  c.fillStyle = grad;
+  c.beginPath(); c.arc(sx, sy, r, 0, Math.PI * 2); c.fill();
+  c.restore();
+
+  // 外环
+  c.save();
+  c.strokeStyle = isRed ? "rgba(176,38,20,0.95)" : "rgba(22,30,40,0.95)";
+  c.lineWidth = Math.max(1.3, cell * (isRed ? 0.048 : 0.034));
+  c.beginPath(); c.arc(sx, sy, r * 0.985, 0, Math.PI * 2); c.stroke();
+  c.strokeStyle = isRed ? "rgba(200,60,34,0.5)" : "rgba(40,52,66,0.5)";
+  c.lineWidth = Math.max(0.8, cell * 0.02);
+  c.beginPath(); c.arc(sx, sy, r * 0.9, 0, Math.PI * 2); c.stroke();
+  // 内环
+  c.strokeStyle = isRed ? "rgba(176,50,26,0.34)" : "rgba(38,48,60,0.34)";
+  c.lineWidth = Math.max(0.8, cell * 0.02);
+  c.beginPath(); c.arc(sx, sy, r * 0.8, 0, Math.PI * 2); c.stroke();
+  c.restore();
+
+  // 字
+  c.save();
+  c.fillStyle = isRed ? "#bc2413" : "#0f1720";
+  c.font = `700 ${r * 1.3}px "Kaiti SC","STKaiti",KaiTi,"楷体","Songti SC",serif`;
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.fillText(cnName(p), sx, sy + r * 0.04);
+  c.restore();
+
+  if (selected) {
+    c.save();
+    c.strokeStyle = "rgba(226,192,90,0.95)";
+    c.lineWidth = Math.max(2, cell * 0.055);
+    c.shadowColor = "rgba(226,192,90,0.55)";
+    c.shadowBlur = cell * 0.25;
+    c.beginPath(); c.arc(sx, sy, r * 1.05, 0, Math.PI * 2); c.stroke();
+    c.restore();
+  }
+}
+
+/* ---------------------------------------------------------------- 右侧可视化 */
+function drawSpaces() {
+  const cols = ["#d4553a", "#c9a227", "#3fb8a0"];
+  for (let i = 0; i < 3; i++) {
+    const cvs = document.getElementById("sp" + i);
+    const { w, h, c } = fitCanvas(cvs);
+    c.clearRect(0, 0, w, h);
+    c.fillStyle = "#0a0e12";
+    c.fillRect(0, 0, w, h);
+
+    // 十字参考
+    c.strokeStyle = "rgba(255,255,255,0.055)";
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(w / 2, 0); c.lineTo(w / 2, h);
+    c.moveTo(0, h / 2); c.lineTo(w, h / 2);
+    c.stroke();
+
+    if (!S.geo || !S.geo.spaces[i]) {
+      c.fillStyle = "rgba(255,255,255,0.16)";
+      c.font = "9px monospace";
+      c.textAlign = "center";
+      c.fillText("no data", w / 2, h / 2 + 3);
+      continue;
+    }
+    const sp = S.geo.spaces[i];
+    const pts = sp.pts;
+    // 自适应范围
+    let mnx = 1e9, mxx = -1e9, mny = 1e9, mxy = -1e9;
+    for (const p of pts) {
+      mnx = Math.min(mnx, p[0]); mxx = Math.max(mxx, p[0]);
+      mny = Math.min(mny, p[1]); mxy = Math.max(mxy, p[1]);
+    }
+    const pad = 0.6;
+    const spanx = Math.max(mxx - mnx, 1) + pad * 2, spany = Math.max(mxy - mny, 1) + pad * 2;
+    const sc = Math.min(w / spanx, h / spany) * 0.86;
+    const cx0 = (mnx + mxx) / 2, cy0 = (mny + mxy) / 2;
+    const TX = (x) => w / 2 + (x - cx0) * sc;
+    const TY = (y) => h / 2 - (y - cy0) * sc;
+
+    // 主轴方向
+    const st = sp.st;
+    const len = Math.max(6, Math.min(w, h) * 0.42);
+    const n = Math.hypot(st.v[0], st.v[1]) || 1;
+    c.strokeStyle = cols[i] + "66";
+    c.lineWidth = 1;
+    c.setLineDash([3, 3]);
+    c.beginPath();
+    c.moveTo(TX(st.c[0]) - (st.v[0] / n) * len, TY(st.c[1]) + (st.v[1] / n) * len);
+    c.lineTo(TX(st.c[0]) + (st.v[0] / n) * len, TY(st.c[1]) - (st.v[1] / n) * len);
+    c.stroke();
+    c.setLineDash([]);
+
+    // 点云
+    for (let k = 0; k < pts.length; k++) {
+      const t = sp.toks[k];
+      const px0 = TX(pts[k][0]), py0 = TY(pts[k][1]);
+      const rr = 1.5 + t.w * 1.5;
+      c.fillStyle = t.role === 0 ? cols[i] : "rgba(120,140,165,0.72)";
+      c.beginPath(); c.arc(px0, py0, rr, 0, Math.PI * 2); c.fill();
+    }
+    // 质心
+    c.strokeStyle = "#fff";
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(TX(st.c[0]) - 3, TY(st.c[1])); c.lineTo(TX(st.c[0]) + 3, TY(st.c[1]));
+    c.moveTo(TX(st.c[0]), TY(st.c[1]) - 3); c.lineTo(TX(st.c[0]), TY(st.c[1]) + 3);
+    c.stroke();
+
+    document.getElementById("st" + i).textContent =
+      "ρ " + st.rho.toFixed(2) + " · " + sp.sh[1].toFixed(1);
+  }
+}
+
+function drawExperts() {
+  const cvs = document.getElementById("experts");
+  const { w, h, c } = fitCanvas(cvs);
+  c.clearRect(0, 0, w, h);
+  if (!S.geo || !S.geo.tree) {
+    c.fillStyle = "rgba(255,255,255,0.14)";
+    c.font = "9px monospace";
+    c.textAlign = "center";
+    c.fillText("no data", w / 2, h / 2);
+    return;
+  }
+  const wts = S.geo.tree.wts;
+  let mx = 0;
+  for (let i = 0; i < G.k; i++) mx = Math.max(mx, wts[i]);
+  const bw = w / G.k;
+  const top = Array.from({ length: G.k }, (_, i) => i)
+    .sort((a, b) => wts[b] - wts[a]).slice(0, 8);
+  for (let i = 0; i < G.k; i++) {
+    const v = mx > 0 ? wts[i] / mx : 0;
+    const bh = Math.max(1, v * (h - 4));
+    const x = i * bw;
+    const hot = top.includes(i);
+    c.fillStyle = hot ? "rgba(226,192,90,0.92)" : `rgba(212,85,58,${0.16 + 0.5 * v})`;
+    c.fillRect(x + bw * 0.18, h - bh, Math.max(1, bw * 0.64), bh);
+  }
+  // 基线
+  c.fillStyle = "rgba(255,255,255,0.08)";
+  c.fillRect(0, h - 1, w, 1);
+
+  const box = document.getElementById("exTop");
+  box.innerHTML = top.slice(0, 5).map((i) =>
+    `<span class="exchip">#${String(i).padStart(2, "0")}<i>${(wts[i] / (S.geo.tree.sw || 1) * 100).toFixed(1)}%</i></span>`
+  ).join("");
+}
+
+function drawSpark() {
+  const line = document.getElementById("sparkLine");
+  const area = document.getElementById("sparkArea");
+  const pts = S.infoHist;
+  if (!pts.length) { line.setAttribute("points", ""); area.setAttribute("points", ""); return; }
+  const n = pts.length;
+  let mn = Math.min(...pts, 0), mx = Math.max(...pts, 0);
+  const pad = Math.max(20, (mx - mn) * 0.15);
+  mn -= pad; mx += pad;
+  const TW = 300, TH = 52;
+  const X = (i) => n === 1 ? TW / 2 : (i / (n - 1)) * TW;
+  const Y = (v) => TH - ((v - mn) / (mx - mn || 1)) * TH;
+  const coords = pts.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`);
+  line.setAttribute("points", coords.join(" "));
+  area.setAttribute("points", `0,${TH} ` + coords.join(" ") + ` ${TW},${TH}`);
+}
+
+/* ---------------------------------------------------------------- 渲染 */
+function renderAll() {
+  computeGeo();      // 几何量要先算，右侧两个画布依赖它
+  drawBoard();
+  drawSpaces();
+  drawExperts();
+  drawSpark();
+  renderMoves();
+  renderStatus();
+}
+
+function renderStatus() {
+  const tn = document.getElementById("turnText");
+  if (S.over) {
+    tn.textContent = S.over;
+    tn.style.color = "var(--gold2)";
+  } else {
+    tn.textContent = S.side === RED ? "红方走子" : "黑方走子";
+    tn.style.color = "var(--text)";
+  }
+  document.getElementById("moveBadge").textContent = "第 " + (S.history.length + 1) + " 手";
+  const chk = !S.over && inCheck(S.board, S.side);
+  document.getElementById("checkBadge").style.display = chk ? "" : "none";
+
+  const badge = document.getElementById("thinkBadge");
+  if (S.busy) { badge.textContent = "思考中"; badge.classList.add("on"); }
+  else if (S.over) { badge.textContent = "终局"; badge.classList.remove("on"); }
+  else { badge.textContent = S.side === S.playerSide ? "轮到你" : "引擎"; badge.classList.remove("on"); }
+}
+
+function renderMoves() {
+  const box = document.getElementById("moveList");
+  if (!S.history.length) {
+    box.innerHTML = '<div class="empty">尚未落子</div>';
+    return;
+  }
+  let html = "";
+  for (let i = 0; i < S.history.length; i += 2) {
+    const a = S.history[i], bmv = S.history[i + 1];
+    html += `<div class="idx">${i / 2 + 1}</div>`;
+    html += `<div class="mv red${i === S.history.length - 1 ? " cur" : ""}">${a.text}</div>`;
+    html += `<div class="mv${bmv && i + 1 === S.history.length - 1 ? " cur" : ""}">${bmv ? bmv.text : ""}</div>`;
+  }
+  box.innerHTML = html;
+  box.scrollTop = box.scrollHeight;
+}
+
+function computeGeo() {
+  if (!G) {
+    document.getElementById("geoScore").textContent = "模型未载入";
+    return;
+  }
+  try {
+    const r = feats45(S.board, S.side);
+    const tree = treeScore45(r.f);
+    S.geo = { ...r, tree, redScore: S.side === RED ? tree.score : -tree.score };
+    document.getElementById("geoScore").textContent = S.geo.redScore.toFixed(1) + " cp";
+    document.getElementById("geoTok").textContent =
+      r.toks + " 子 / " + (r.spaces.length ? "3 空间" : "无坐标");
+  } catch (e) {
+    console.warn("几何复算失败", e);
+    S.geo = null;
+  }
+}
+
+/* ---------------------------------------------------------------- 引擎通信 */
+const api = {
+  async status() {
+    const r = await fetch("/api/status", { cache: "no-store" });
+    return r.json();
+  },
+  async post(p, body) {
+    const r = await fetch(p, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {})
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || "引擎错误");
+    return j;
+  },
+  async models() {
+    const r = await fetch("/api/models", { cache: "no-store" });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || "模型列表读取失败");
+    return j;
+  },
+  async setModel(rel) {
+    return this.post("/api/model", { name: rel });
+  }
+};
+
+let es = null;
+function connectStream() {
+  if (typeof EventSource === "undefined") return;
+  try { es = new EventSource("/api/stream"); } catch (e) { return; }
+  es.onmessage = (ev) => {
+    let m;
+    try { m = JSON.parse(ev.data); } catch (e) { return; }
+    if (m.type === "engine") {
+      setEngineState(!!m.ok, m.ok ? "已连接 · " + (m.name || "CatChess") : (m.msg || "未连接"));
+      if (m.name) document.getElementById("engName").textContent = m.name;
+    } else if (m.type === "info") {
+      onInfo(m);
+    } else if (m.type === "log") {
+      if (/illegal|bad fen|超时/.test(m.msg)) toast(m.msg);
+    }
+  };
+  es.onerror = () => { /* 浏览器会自动重连 */ };
+}
+
+function setEngineState(ok, text) {
+  const dot = document.getElementById("dotEngine");
+  dot.className = "dot " + (ok ? "ok" : "bad");
+  document.getElementById("pillEngine").textContent = text;
+  const st = document.getElementById("engState");
+  st.textContent = ok ? "在线" : "离线";
+  st.className = ok ? "ok" : "bad";
+}
+
+function setEngineIdentity(name, exe) {
+  const base = String(exe || "").split(/[\\/]/).pop() || "—";
+  document.getElementById("engName").textContent = name || "—";
+  document.getElementById("engModel").textContent = base;
+  const el = document.getElementById("engExe");
+  el.textContent = base;
+  el.title = exe || "";
+}
+
+function onInfo(m) {
+  if (!S.listening) return;      // 迟到的 info 会把上一手的分数画到新局面上
+  if (m.depth != null) document.getElementById("sDepth").textContent = m.depth;
+  if (m.nodes != null) {
+    document.getElementById("sNodes").textContent =
+      m.nodes > 1e6 ? (m.nodes / 1e6).toFixed(2) + "M" : (m.nodes / 1000).toFixed(1) + "k";
+  }
+  if (m.nps != null) {
+    document.getElementById("sNps").textContent =
+      m.nps >= 1e6 ? (m.nps / 1e6).toFixed(2) + "M"
+      : m.nps >= 1000 ? Math.round(m.nps / 1000) + "k"
+      : String(m.nps);
+  }
+  if (m.score != null) {
+    S.lastRawScore = m.score;
+    const red = S.searchSide === RED ? m.score : -m.score;
+    if (m.depth >= 1) S.infoHist.push(red);
+    document.getElementById("sScore").textContent = (red > 0 ? "+" : "") + red;
+    setEvalBar(red);
+    drawSpark();
+  }
+}
+
+function setEvalBar(cp) {
+  const fill = document.getElementById("evalFill");
+  const v = Math.max(-1000, Math.min(1000, cp));
+  const pct = Math.abs(v) / 1000 * 50;
+  if (v >= 0) {
+    fill.classList.remove("neg");
+    fill.style.left = "50%";
+    fill.style.width = pct + "%";
+  } else {
+    fill.classList.add("neg");
+    fill.style.left = 50 - pct + "%";
+    fill.style.width = pct + "%";
+  }
+  const num = document.getElementById("evalNum");
+  num.innerHTML = `<b style="color:${cp >= 0 ? "var(--red2)" : "var(--teal)"}">${cp > 0 ? "+" : ""}${cp}</b> cp`;
+}
+
+async function engineThink(moves) {
+  const j = await api.post("/api/think", { moves, ms: S.ms });
+  return j.bestmove;
+}
+
+/* ---------------------------------------------------------------- 对局流程 */
+function historyUci() {
+  return S.history.map((h) => h.uci);
+}
+
+function doMove(mv, byEngine) {
+  const f = (mv / 100) | 0, t = mv % 100;
+  const p = S.board[f];
+  if (!p) return false;
+  const text = moveText(S.board, mv);
+  const cap = S.board[t];
+  S.anim = { fx: fx(f), fy: fy(f), tx: fx(t), ty: fy(t), p, t0: performance.now(), dur: byEngine ? 220 : 150 };
+  S.board[t] = p; S.board[f] = 0;
+  S.side = -S.side;
+  S.fenHist.push(toFen(S.board, S.side));
+  S.history.push({ mv, uci: uciOf(mv), text, side: p > 0 ? RED : BLACK, cap });
+  S.lastMove = { f, t };
+  S.selected = -1; S.legalForSel = []; S.hint = null;
+  S.infoHist = [];
+  setTimeout(() => { S.anim = null; }, byEngine ? 240 : 170);
+
+  renderMoves(); renderStatus();
+  computeGeo();
+  drawBoard();
+
+  // 终局判定
+  const legal = legalMoves(S.board, S.side);
+  if (!legal.length) {
+    const win = S.side === RED ? "黑方胜" : "红方胜";
+    S.over = inCheck(S.board, S.side) ? win + "（将死）" : win + "（困毙）";
+    renderStatus();
+    toast(S.over);
+    return true;
+  }
+  if (isRepetition()) { S.over = "和棋（三次重复）"; renderStatus(); toast(S.over); return true; }
+  if (S.history.length >= 240) { S.over = "和棋（120 回合）"; renderStatus(); return true; }
+
+  if (S.side !== S.playerSide && !S.over) scheduleEngineMove();
+  return true;
+}
+
+function isRepetition() {
+  const key = toFen(S.board, S.side);
+  let n = 0;
+  for (const f of S.fenHist) if (f === key) n++;
+  return n >= 3;
+}
+
+let thinkTimer = null;
+function scheduleEngineMove() {
+  if (S.over || S.busy) return;
+  const gen = (S.gen = (S.gen || 0) + 1);
+  S.busy = true;
+  S.searchSide = S.side;
+  S.listening = true;
+  renderStatus();
+  const t0 = performance.now();
+  document.getElementById("thinkBadge").classList.add("on");
+  if (thinkTimer) clearInterval(thinkTimer);
+  thinkTimer = setInterval(() => {
+    document.getElementById("thinkBadge").textContent =
+      "思考中 " + ((performance.now() - t0) / 1000).toFixed(1) + "s";
+  }, 90);
+
+  engineThink(historyUci())
+    .then((bm) => {
+      if (gen !== S.gen) return;      // 期间开过新局，这一手作废
+      clearInterval(thinkTimer); thinkTimer = null;
+      S.busy = false;
+      setTimeout(() => { S.listening = false; }, 200);
+      document.getElementById("thinkBadge").classList.remove("on");
+      const mv = parseUci(bm);
+      if (!mv) { S.over = "引擎无着可走"; renderStatus(); return; }
+      const legal = legalMoves(S.board, S.side);
+      if (!legal.includes(mv)) {
+        toast("引擎返回非法着法 " + bm);
+        S.busy = false;
+        return;
+      }
+      doMove(mv, true);
+      refreshEngEval();
+    })
+    .catch((e) => {
+      if (gen !== S.gen) return;
+      clearInterval(thinkTimer); thinkTimer = null;
+      S.busy = false; S.listening = false;
+      document.getElementById("thinkBadge").classList.remove("on");
+      renderStatus();
+      toast("引擎调用失败：" + e.message);
+    });
+}
+
+async function refreshEngEval() {
+  try {
+    const j = await api.post("/api/eval", { moves: historyUci() });
+    const cp = j.cp;
+    const red = S.side === RED ? cp : -cp;
+    document.getElementById("engScore").textContent = (red > 0 ? "+" : "") + red + " cp";
+  } catch (e) { /* 忽略 */ }
+}
+
+/* ---------------------------------------------------------------- 交互 */
+cv.addEventListener("click", (ev) => {
+  if (S.busy || S.over) return;
+  if (S.side !== S.playerSide) return;
+  const sq = pickCell(ev.clientX, ev.clientY);
+  if (sq < 0) { S.selected = -1; S.legalForSel = []; drawBoard(); return; }
+
+  const p = S.board[sq];
+  if (S.selected >= 0) {
+    const mv = S.selected * 100 + sq;
+    if (S.legalForSel.includes(mv)) {
+      doMove(mv, false);
+      return;
+    }
+    if (p && (p > 0 ? RED : BLACK) === S.side) {
+      selectSquare(sq);
+      return;
+    }
+    S.selected = -1; S.legalForSel = []; drawBoard();
+    return;
+  }
+  if (p && (p > 0 ? RED : BLACK) === S.side) selectSquare(sq);
+});
+
+function selectSquare(sq) {
+  S.selected = sq;
+  S.legalForSel = legalMoves(S.board, S.side).filter((m) => ((m / 100) | 0) === sq);
+  drawBoard();
+}
+
+document.getElementById("btnNew").onclick = () => {
+  if (es) { /* keep */ }
+  api.post("/api/newgame", {}).catch(() => {});
+  resetState(S.playerSide);
+  toast("新局开始 · 你执" + (S.playerSide === RED ? "红" : "黑"));
+};
+
+document.getElementById("btnUndo").onclick = () => {
+  if (S.busy) return;
+  if (!S.history.length) return toast("没有可悔的棋");
+  // 退到"轮到玩家"为止：执红退 2 步，执黑退 1 步
+  let n = 0;
+  while (S.history.length && n < 2) {
+    undoOne();
+    n++;
+    if (S.side === S.playerSide) break;
+  }
+  S.over = null;
+  renderAll();
+  toast("已悔 " + n + " 步");
+  // 执黑时退到开局，轮到引擎重开第一手
+  if (S.side !== S.playerSide) scheduleEngineMove();
+};
+
+function undoOne() {
+  const h = S.history.pop();
+  if (!h) return;
+  if (S.fenHist.length > 1) S.fenHist.pop();
+  const f = (h.mv / 100) | 0, t = h.mv % 100;
+  S.board[f] = S.board[t];
+  S.board[t] = h.cap || 0;
+  S.side = -S.side;
+  S.infoHist = [];
+  S.lastMove = S.history.length ? {
+    f: (S.history[S.history.length - 1].mv / 100) | 0,
+    t: S.history[S.history.length - 1].mv % 100
+  } : null;
+}
+
+document.getElementById("btnFlip").onclick = () => { S.flip = !S.flip; drawBoard(); };
+
+/* ---------------------------------------------------------------- 模型修改 */
+const modelModal = document.getElementById("modelModal");
+const modelSelect = document.getElementById("modelSelect");
+const modelPath = document.getElementById("modelPath");
+
+function closeModelModal() {
+  modelModal.classList.remove("show");
+  modelModal.setAttribute("aria-hidden", "true");
+}
+
+async function loadModelList() {
+  modelSelect.innerHTML = "";
+  modelPath.textContent = "正在读取本地模型…";
+  try {
+    const j = await api.models();
+    const list = j.models || [];
+    if (!list.length) {
+      modelPath.textContent = "没有发现可用的 .exe 模型";
+      return;
+    }
+    let current = null;
+    for (const m of list) {
+      const opt = document.createElement("option");
+      opt.value = m.rel;
+      opt.textContent = m.rel + (m.current ? "（当前）" : "");
+      if (m.current) { opt.selected = true; current = m; }
+      modelSelect.appendChild(opt);
+    }
+    modelPath.textContent = current ? "当前：" + current.rel : "当前：" + j.current;
+  } catch (e) {
+    modelPath.textContent = "模型列表读取失败：" + e.message + "（对弈需先启动 web/server.js）";
+  }
+}
+
+async function applyModel() {
+  const rel = modelSelect.value;
+  if (!rel) return toast("请选择一个模型");
+  const btn = document.getElementById("btnModelApply");
+  btn.disabled = true;
+  const old = btn.textContent;
+  btn.textContent = "切换中…";
+  try {
+    const j = await api.setModel(rel);
+    setEngineIdentity(j.name, j.exe);
+    setEngineState(true, "已连接 · " + (j.name || "CatChess"));
+    document.getElementById("footState").textContent = "模型已切换 · " + j.model;
+    closeModelModal();
+    toast("模型已切换：" + j.model);
+  } catch (e) {
+    toast("模型切换失败：" + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = old;
+  }
+}
+
+document.getElementById("btnModel").onclick = async () => {
+  if (!(location.protocol === "http:" || location.protocol === "https:")) {
+    return toast("模型切换需要本地服务：node web/server.js");
+  }
+  modelModal.classList.add("show");
+  modelModal.setAttribute("aria-hidden", "false");
+  await loadModelList();
+};
+document.getElementById("btnModelClose").onclick = closeModelModal;
+document.getElementById("btnModelRefresh").onclick = loadModelList;
+document.getElementById("btnModelApply").onclick = applyModel;
+modelModal.addEventListener("click", (ev) => { if (ev.target === modelModal) closeModelModal(); });
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && modelModal.classList.contains("show")) closeModelModal();
+});
+
+document.getElementById("btnHint").onclick = async () => {
+  if (S.busy || S.over) return;
+  if (S.side !== S.playerSide) return toast("等引擎走完");
+  S.busy = true; S.searchSide = S.side; S.listening = true;
+  renderStatus();
+  try {
+    const bm = await engineThink(historyUci());
+    const mv = parseUci(bm);
+    if (mv) {
+      S.hint = { f: (mv / 100) | 0, t: mv % 100 };
+      drawBoard();
+      toast("建议：" + moveText(S.board, mv));
+    }
+  } catch (e) {
+    toast("提示失败：" + e.message);
+  } finally {
+    S.busy = false;
+    setTimeout(() => { S.listening = false; }, 200);
+    renderStatus();
+  }
+};
+
+document.getElementById("segSide").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button");
+  if (!b || S.busy) return;
+  [...b.parentNode.children].forEach((x) => x.classList.remove("on", "acc"));
+  b.classList.add("on", "acc");
+  const v = +b.dataset.v;
+  resetState(v);
+});
+
+document.getElementById("segTime").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button");
+  if (!b) return;
+  [...b.parentNode.children].forEach((x) => x.classList.remove("on"));
+  b.classList.add("on");
+  S.ms = +b.dataset.v;
+});
+
+document.getElementById("btnPerft").onclick = async () => {
+  const btn = document.getElementById("btnPerft");
+  const out = document.getElementById("perftOut");
+  btn.disabled = true;
+  out.textContent = "计数中…";
+  try {
+    const local = countPerft(parseFen(START_FEN).b, RED, 3);
+    const j = await api.post("/api/perft", { moves: [], depth: 3 });
+    const ok = j.nodes === local;
+    out.innerHTML =
+      `前端 perft(3) = <b style="color:var(--text)">${local}</b><br>` +
+      `引擎 perft(3) = <b style="color:var(--text)">${j.nodes}</b><br>` +
+      `<span style="color:${ok ? "var(--teal)" : "var(--red2)"}">${ok ? "✓ 完全一致" : "✗ 不一致"}</span>`;
+  } catch (e) {
+    out.innerHTML = `<span style="color:var(--red2)">${e.message}</span>`;
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+function countPerft(b, side, d) {
+  if (d === 0) return 1;
+  const lm = legalMoves(b, side);
+  if (d === 1) return lm.length;
+  let n = 0;
+  for (const mv of lm) {
+    const f = (mv / 100) | 0, t = mv % 100;
+    const cap = b[t];
+    b[t] = b[f]; b[f] = 0;
+    n += countPerft(b, -side, d - 1);
+    b[f] = b[t]; b[t] = cap;
+  }
+  return n;
+}
+
+/* ---------------------------------------------------------------- 杂项 */
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2200);
+}
+
+window.addEventListener("resize", () => {
+  drawBoard(); drawSpaces(); drawExperts();
+});
+
+/* 动画循环：只在需要时重绘棋盘（将军脉冲 / 落子动画） */
+function loop() {
+  if (S.anim || (!S.over && inCheck(S.board, S.side))) drawBoard();
+  requestAnimationFrame(loop);
+}
+
+/* ---------------------------------------------------------------- 启动 */
+(async function boot() {
+  // 静态打开（file://）时给出明确提示，不让空白棋盘被误解为故障
+  const isHttp = location.protocol === "http:" || location.protocol === "https:";
+  if (!isHttp) {
+    setEngineState(false, "静态浏览模式");
+    document.getElementById("footState").textContent = "静态浏览：界面与几何视图可用，对弈请用 node web/server.js 启动";
+  }
+  const { b, side } = parseFen(START_FEN);
+  S.board = b; S.side = side;
+  S.playerSide = RED;
+  S.fenHist = [toFen(b, side)];
+  renderAll();
+
+  if (isHttp) {
+    try {
+      const st = await api.status();
+      if (st.ok) {
+        setEngineState(true, "已连接 · " + (st.name || "CatChess"));
+        setEngineIdentity(st.name, st.exe);
+        document.getElementById("footState").textContent = "引擎就绪 · 每步 " + S.ms + "ms";
+        connectStream();
+      } else {
+        setEngineState(false, st.error || "引擎未就绪");
+        document.getElementById("footState").textContent = st.error || "引擎未就绪";
+      }
+    } catch (e) {
+      setEngineState(false, "服务未响应");
+    }
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,908 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GeoLite 象棋 AI · 几何轨迹驱动的轻量博弈引擎</title>
+<style>
+  :root{
+    --bg:#0e1014; --card:#161a21; --card2:#1b2028; --line:#2a3140;
+    --tx:#e7e9ef; --mut:#8d95a6; --dim:#5f6675;
+    --red:#e0455a; --gold:#d8a657; --jade:#4fb49a; --blue:#5b8fd6;
+    --wood1:#f0ddbb; --wood2:#e2c69c; --ink:#22262c;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--tx)}
+  body{font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+       -webkit-font-smoothing:antialiased;line-height:1.55}
+  .wrap{max-width:1400px;margin:0 auto;padding:22px 24px 40px}
+  header{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px;margin-bottom:18px}
+  h1{font-size:24px;margin:0;letter-spacing:.5px;font-weight:650}
+  h1 .accent{color:var(--gold)}
+  .sub{color:var(--mut);font-size:12.5px;max-width:760px;margin:2px 0 0}
+  .pills{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+  .pill{font-size:11.5px;color:var(--mut);border:1px solid var(--line);
+        padding:4px 9px;border-radius:20px;background:#12151b}
+  .pill b{color:var(--tx);font-weight:600}
+
+  .main{display:grid;grid-template-columns:minmax(420px,1fr) 420px;gap:22px;align-items:start}
+  @media (max-width:1080px){.main{grid-template-columns:1fr}}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+  .card h2{font-size:12px;letter-spacing:1.6px;color:var(--mut);margin:0 0 10px;font-weight:600;text-transform:uppercase}
+  .row{display:flex;align-items:center;gap:10px}
+  .between{display:flex;align-items:center;justify-content:space-between;gap:10px}
+
+  /* 棋盘 */
+  .boardbox{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+  #board{display:block;width:100%;height:auto;border-radius:10px;cursor:pointer}
+  .status{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:13.5px;min-height:24px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--jade);flex:0 0 auto}
+  .dot.red{background:var(--red)} .dot.gold{background:var(--gold)}
+  .status .who{color:var(--tx);font-weight:600}
+  .status .hint{color:var(--mut);font-size:12px}
+
+  .tools{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  button{font:inherit;font-size:12.5px;color:var(--tx);background:var(--card2);
+         border:1px solid var(--line);border-radius:9px;padding:7px 12px;cursor:pointer;
+         transition:.15s}
+  button:hover{background:#232a35;border-color:#38414f}
+  button.primary{background:#25313c;border-color:#3c5a6b;color:#cfe6f2}
+  button.primary:hover{background:#2c3b48}
+  button:disabled{opacity:.42;cursor:not-allowed}
+
+  .moves{margin-top:12px;max-height:132px;overflow:auto;font-family:ui-monospace,Consolas,monospace;
+         font-size:12px;color:var(--mut);border-top:1px solid var(--line);padding-top:10px}
+  .moves span{display:inline-block;min-width:104px;margin:1px 0}
+  .moves span.redm{color:#f08598}
+  .moves span.blkm{color:#a9c0dc}
+  .moves i{font-style:normal;color:#7fb2e5;font-size:11px;margin-left:5px;opacity:.85}
+
+  /* 面板 */
+  .tabs{display:flex;gap:6px;margin-bottom:12px;background:#12151b;border:1px solid var(--line);
+        border-radius:10px;padding:4px}
+  .tabs button{flex:1;background:none;border:none;padding:6px 0;color:var(--mut);border-radius:7px}
+  .tabs button.on{background:#232a35;color:var(--tx)}
+
+  .kv{font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+  .stategrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .stbox{background:#12151b;border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+  .stbox .k{font-size:10.5px;color:var(--dim);letter-spacing:1px}
+  .stbox .v{font-family:ui-monospace,Consolas,monospace;font-size:15px;font-weight:600}
+  .stbox .n{font-size:10.5px;color:var(--mut)}
+
+  .verdict{margin-top:10px;background:#12151b;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .verdict .cls{font-size:16px;font-weight:650;color:var(--gold)}
+  .verdict .why{font-size:11.5px;color:var(--mut);margin-top:3px}
+
+  .bars{display:flex;flex-direction:column;gap:5px;margin-top:8px}
+  .bar{display:grid;grid-template-columns:72px 1fr 52px;gap:8px;align-items:center;font-size:11.5px}
+  .bar .track{height:6px;background:#20262f;border-radius:4px;overflow:hidden}
+  .bar .fill{height:100%;background:linear-gradient(90deg,#3d4d63,#5b8fd6);border-radius:4px}
+  .bar.hot .fill{background:linear-gradient(90deg,#8a5a2a,var(--gold))}
+  .bar .num{text-align:right;color:var(--mut);font-family:ui-monospace,Consolas,monospace}
+
+  #scatter{display:block;width:100%;height:230px;background:#101318;border:1px solid var(--line);border-radius:10px}
+  .legend{display:flex;gap:12px;font-size:11px;color:var(--mut);margin-top:6px;flex-wrap:wrap}
+  .lg{display:flex;align-items:center;gap:5px}
+  .sw{width:8px;height:8px;border-radius:50%}
+
+  .ladder{display:flex;align-items:flex-end;gap:3px;height:58px;margin-top:8px}
+  .ladder .col{flex:1;background:#20262f;border-radius:2px;position:relative;cursor:pointer}
+  .ladder .col .bar2{position:absolute;bottom:0;left:0;right:0;background:#3a5570;border-radius:2px}
+  .ladder .col.on .bar2{background:var(--gold)}
+  .ladder .lbl{font-size:9px;color:var(--dim);text-align:center;margin-top:3px}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+  .chip{font-size:11px;background:#1b2028;border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:var(--mut)}
+  .chip.g{color:var(--gold);border-color:#4a3d24}
+  .chip.r{color:var(--red);border-color:#4a2a30}
+
+  table{width:100%;border-collapse:collapse;font-size:11.5px}
+  th,td{padding:5px 6px;text-align:right;border-bottom:1px solid #212733}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--dim);font-weight:500;font-size:10.5px;letter-spacing:.5px}
+  td{font-family:ui-monospace,Consolas,monospace;color:var(--mut)}
+  tr.hi td{color:var(--tx);background:#1b222b}
+  .note{font-size:11.5px;color:var(--mut);margin-top:10px;border-left:2px solid #33405a;padding-left:10px}
+  .note b{color:var(--tx);font-weight:600}
+  .steps{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+  .step{display:grid;grid-template-columns:20px 1fr;gap:9px;font-size:11.5px;color:var(--mut)}
+  .step i{font-style:normal;color:var(--gold);font-family:ui-monospace,monospace}
+  .step b{color:var(--tx);font-weight:600}
+  .slider{display:grid;grid-template-columns:84px 1fr 40px;gap:8px;align-items:center;font-size:11.5px;color:var(--mut);margin-top:8px}
+  input[type=range]{-webkit-appearance:none;height:4px;background:#2a3140;border-radius:3px;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;
+    background:var(--gold);cursor:pointer;border:2px solid #101318}
+  select{font:inherit;font-size:12px;background:var(--card2);color:var(--tx);border:1px solid var(--line);
+         border-radius:8px;padding:6px 8px}
+  .hide{display:none}
+  .foot{margin-top:18px;color:var(--dim);font-size:11px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>GeoLite <span class="accent">象棋 AI</span></h1>
+      <p class="sub">按《GeoLite-LLM：基于几何轨迹与十层压缩的轻量级意图识别架构》的五段链路改造的象棋引擎：棋子令牌 → 二维词坐标 → 加权质心与主方向拟合 → 十层级联压缩 → 态势原型／kNN 检索 → 策略权重驱动搜索。</p>
+    </div>
+    <div class="pills">
+      <div class="pill">模型 <b id="pillModel">—</b></div>
+      <div class="pill">精度(kNN) <b id="pillAcc">—</b></div>
+      <div class="pill">单步几何 <b id="pillLat">—</b></div>
+    </div>
+  </header>
+
+  <div class="main">
+    <!-- 棋盘列 -->
+    <div>
+      <div class="boardbox">
+        <canvas id="board"></canvas>
+        <div class="status">
+          <div class="dot" id="dot"></div>
+          <div>
+            <div class="who" id="statusWho">红方走棋</div>
+            <div class="hint" id="statusHint">点击棋子查看合法着法</div>
+          </div>
+        </div>
+        <div class="tools">
+          <button class="primary" id="btnNew">新对局</button>
+          <button id="btnUndo">悔棋</button>
+          <button id="btnAI">让 AI 走</button>
+          <select id="selSide">
+            <option value="1">玩家执红（先手）</option>
+            <option value="-1">玩家执黑（后手）</option>
+          </select>
+          <select id="selLevel">
+            <option value="2">入门 · 深 2</option>
+            <option value="4" selected>标准 · 深 4</option>
+            <option value="5">挑战 · 深 5</option>
+          </select>
+        </div>
+        <div class="tools" style="margin-top:10px">
+          <button id="btnBook">开局库：开</button>
+          <button id="btnGeom">几何相位：开</button>
+          <button id="btnHints">显示合法着法：开</button>
+          <button id="btnFlip">翻转棋盘</button>
+        </div>
+        <div class="moves" id="moves"></div>
+      </div>
+    </div>
+
+    <!-- 右侧面板 -->
+    <div>
+      <div class="tabs">
+        <button class="on" data-tab="eng">几何面板</button>
+        <button data-tab="exp">实验数据</button>
+      </div>
+
+      <div id="tab-eng">
+        <div class="card">
+          <h2>四维状态 s = [c<sub>x</sub>, c<sub>y</sub>, tanθ, ρ]</h2>
+          <div class="stategrid">
+            <div class="stbox"><div class="k">质心 c<sub>x</sub></div><div class="v" id="vCx">—</div><div class="n">阵形横向重心</div></div>
+            <div class="stbox"><div class="k">质心 c<sub>y</sub></div><div class="v" id="vCy">—</div><div class="n">阵形纵向重心</div></div>
+            <div class="stbox"><div class="k">斜率 tanθ</div><div class="v" id="vSl">—</div><div class="n">主方向（±5 截断）</div></div>
+            <div class="stbox"><div class="k">残差 ρ</div><div class="v" id="vRho">—</div><div class="n">点列偏离主线程度</div></div>
+          </div>
+          <div class="verdict">
+            <div class="between">
+              <div>
+                <div class="cls" id="vCls">—</div>
+                <div class="why" id="vWhy">检索结果说明</div>
+              </div>
+              <div class="kv" id="vConf" style="text-align:right;color:var(--mut)">—</div>
+            </div>
+          </div>
+          <div class="slider">
+            <span>压缩层数 L</span>
+            <input type="range" id="rngLayer" min="0" max="10" step="1" value="7">
+            <span id="lblLayer" class="kv">7</span>
+          </div>
+          <div class="slider">
+            <span>kNN 的 k</span>
+            <input type="range" id="rngK" min="1" max="9" step="1" value="5">
+            <span id="lblK" class="kv">5</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>轨迹拟合（走子方视角）</h2>
+          <canvas id="scatter"></canvas>
+          <div class="legend">
+            <div class="lg"><span class="sw" style="background:var(--red)"></span>己方令牌</div>
+            <div class="lg"><span class="sw" style="background:var(--blue)"></span>对方令牌</div>
+            <div class="lg"><span class="sw" style="border:1px solid #6c7686;background:none"></span>已被压缩剔除</div>
+            <div class="lg">✕ 质心</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>十层级联压缩</h2>
+          <div class="ladder" id="ladder"></div>
+          <div id="ladderLabels" style="display:flex;gap:3px;margin-top:2px"></div>
+          <div class="chips" id="chips"></div>
+          <div class="note" id="compNote">每一层删除离当前主直线最远的棋子，再在局部坐标系中重新拟合。</div>
+        </div>
+
+        <div class="card">
+          <h2>状态检索 · 六类态势</h2>
+          <div class="bars" id="protoBars"></div>
+          <div class="note" id="knnNote">kNN 距离加权投票：—</div>
+        </div>
+
+        <div class="card">
+          <h2>胜率预测（令牌 → 逻辑回归，任意局面）</h2>
+          <div class="verdict">
+            <div class="between">
+              <div>
+                <div class="cls" id="vScore">—</div>
+                <div class="why" id="vScoreWhy">由当前局面自己算出，不查棋谱库，也不需要和棋谱“完全一样”。</div>
+              </div>
+              <div class="kv" id="vScoreConf" style="text-align:right;color:var(--mut)">—</div>
+            </div>
+          </div>
+          <div class="bars" id="winBars"></div>
+          <div class="note" id="winNote">—</div>
+        </div>
+
+        <div class="card">
+          <h2>纯四维状态的胜率模型（论文原样）</h2>
+          <div class="bars" id="geoWinBars"></div>
+          <div class="note" id="geoWinNote">—</div>
+        </div>
+
+        <div class="card">
+          <h2>开局库命中（候选着法 · 局数）</h2>
+          <div class="note" id="bookLive">—</div>
+          <div class="bars" id="bookBars"></div>
+        </div>
+      </div>
+
+      <div id="tab-exp" class="hide">
+        <div class="card">
+          <h2>五折交叉验证（真实棋谱 + 自对弈）</h2>
+          <table id="layerTable">
+            <thead><tr><th>层</th><th>原型</th><th>kNN</th><th>宏F1</th><th>令牌</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <div class="note" id="expNote"></div>
+          <div class="note" id="bookNote"></div>
+        </div>
+        <div class="card">
+          <h2>方法对照</h2>
+          <table id="cmpTable"><tbody></tbody></table>
+        </div>
+        <div class="card">
+          <h2>五段链路映射</h2>
+          <div class="steps">
+            <div class="step"><i>1</i><div><b>令牌化</b>：每个棋子映射为「阵营·兵种·规范化格位」令牌，红黑按 180° 旋到同一坐标架。</div></div>
+            <div class="step"><i>2</i><div><b>坐标学习</b>：语料内按空间邻域统计共现，PPMI + 截断 SVD 得二维词坐标；兵种角色权重 + 过河加成对应论文的词性加权。</div></div>
+            <div class="step"><i>3</i><div><b>轨迹拟合</b>：加权质心 c、最大特征值方向 v、加权垂直残差 ρ，输出四维状态。</div></div>
+            <div class="step"><i>4</i><div><b>十层压缩</b>：每层剔除离主直线最远的棋子并重拟合，保留词数 ≤3 时停止。</div></div>
+            <div class="step"><i>5</i><div><b>检索与策略</b>：标准化欧氏距离下比对六类原型与 kNN 库，得到态势类别，再映射为搜索的评估权重。</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>结论边界</h2>
+          <div class="note">几何状态只是<b>路由器</b>：它把盘面粗分成六类态势，类别再调权搜索。真正的战术与合法性由规则层与 α-β 搜索负责。论文的结论在这里同样成立——四维状态会丢掉棋子身份，精度不足以单独支撑判断；本页的棋力主要来自搜索，几何层提供可解释的相位与着法排序偏置。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">GeoLite-Xiangqi · 规则内核 perft 1/2/3 = 44 / 1920 / 79666 · 状态固定为 4 个 32 位浮点</div>
+</div>
+
+<script>
+/*__MODEL__*/
+/*__BOOK__*/
+</script>
+<script>
+/*__ENGINE__*/
+</script>
+<script>
+(function () {
+  'use strict';
+  const XQ = window.XQ;
+  const MODEL = window.GEOLITE_MODEL;
+  XQ.setModel(MODEL);
+  if (window.GEOLITE_BOOK) XQ.setBook(window.GEOLITE_BOOK);
+  window.addEventListener('error', (e) => {
+    const h = document.getElementById('statusHint');
+    if (h) h.textContent = '运行错误：' + (e.message || String(e.error));
+  });
+
+  // ---------- 状态 ----------
+  const S = {
+    board: XQ.initial(),
+    side: XQ.RED,
+    playerSide: XQ.RED,
+    sel: -1,
+    legalFrom: [],
+    history: [],
+    log: [],
+    lastMove: null,
+    over: false,
+    thinking: false,
+    layer: 7,
+    k: 5,
+    useGeom: true,
+    useBook: true,
+    bookTag: null,
+    showHints: true,
+    flip: false,
+    phase: 'maneuver',
+    rep: {},
+    lastReport: null
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const CLASSES = MODEL.meta.classes;
+  const CLASS_CN = MODEL.meta.class_cn;
+  const GLYPH = XQ.NAME;
+
+  // ---------- 棋盘绘制 ----------
+  const cv = $('board'), ctx = cv.getContext('2d');
+  let cell = 56, padX = 48, padY = 34, W = 0, H = 0, dpr = 1;
+
+  function layout() {
+    const box = cv.parentElement.clientWidth - 28;
+    const maxW = box, maxH = Math.min(window.innerHeight - 250, 780);
+    cell = Math.floor(Math.min(maxW / 9.6, maxH / 10.6));
+    cell = Math.max(34, cell);
+    padX = cell * 0.62; padY = cell * 0.55;
+    W = cell * 8 + padX * 2; H = cell * 9 + padY * 2;
+    dpr = window.devicePixelRatio || 1;
+    cv.width = W * dpr; cv.height = H * dpr;
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    draw();
+  }
+
+  function toScreen(s) {
+    let x = s % 9, y = (s / 9) | 0;
+    if (S.flip) { x = 8 - x; y = 9 - y; }
+    return [padX + x * cell, padY + y * cell];
+  }
+
+  function drawBoardBg() {
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, '#f2e0c0'); g.addColorStop(0.5, '#ecd6b0'); g.addColorStop(1, '#e4c99f');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // 木纹
+    ctx.save();
+    ctx.globalAlpha = 0.06; ctx.strokeStyle = '#6b4a24';
+    for (let i = 0; i < 26; i++) {
+      ctx.beginPath();
+      const y0 = (i / 26) * H;
+      ctx.moveTo(0, y0);
+      ctx.bezierCurveTo(W * 0.3, y0 + 6, W * 0.7, y0 - 6, W, y0 + 2);
+      ctx.lineWidth = i % 3 === 0 ? 1.4 : 0.7; ctx.stroke();
+    }
+    ctx.restore();
+
+    ctx.strokeStyle = 'rgba(92,62,28,.85)'; ctx.lineWidth = 1;
+    for (let y = 0; y < 10; y++) {
+      ctx.beginPath(); ctx.moveTo(padX, padY + y * cell); ctx.lineTo(padX + 8 * cell, padY + y * cell); ctx.stroke();
+    }
+    for (let x = 0; x < 9; x++) {
+      const x0 = padX + x * cell;
+      if (x === 0 || x === 8) { ctx.beginPath(); ctx.moveTo(x0, padY); ctx.lineTo(x0, padY + 9 * cell); ctx.stroke(); }
+      else {
+        ctx.beginPath(); ctx.moveTo(x0, padY); ctx.lineTo(x0, padY + 4 * cell); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x0, padY + 5 * cell); ctx.lineTo(x0, padY + 9 * cell); ctx.stroke();
+      }
+    }
+    // 九宫
+    for (const yTop of [0, 7]) {
+      ctx.beginPath();
+      ctx.moveTo(padX + 3 * cell, padY + yTop * cell);
+      ctx.lineTo(padX + 5 * cell, padY + (yTop + 2) * cell);
+      ctx.moveTo(padX + 5 * cell, padY + yTop * cell);
+      ctx.lineTo(padX + 3 * cell, padY + (yTop + 2) * cell);
+      ctx.stroke();
+    }
+    // 楚河汉界
+    ctx.save();
+    ctx.fillStyle = 'rgba(96,66,30,.55)';
+    ctx.font = `${Math.round(cell * 0.44)}px "KaiTi","STKaiti",serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const ry = padY + 4.5 * cell;
+    ctx.fillText('楚 河', padX + 2 * cell, ry);
+    ctx.fillText('汉 界', padX + 6 * cell, ry);
+    ctx.restore();
+    // 外框
+    ctx.strokeStyle = 'rgba(92,62,28,.9)'; ctx.lineWidth = 2;
+    ctx.strokeRect(padX - cell * 0.24, padY - cell * 0.24, 8 * cell + cell * 0.48, 9 * cell + cell * 0.48);
+  }
+
+  function drawPiece(s, p, opts) {
+    const [x, y] = toScreen(s);
+    const r = cell * 0.44;
+    const isRed = p > 0;
+    ctx.save();
+    if (opts && opts.sel) {
+      ctx.shadowColor = 'rgba(216,166,87,.95)'; ctx.shadowBlur = 16;
+    }
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+    const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.2, x, y, r);
+    g.addColorStop(0, '#fffaf0'); g.addColorStop(0.75, '#f6e8d0'); g.addColorStop(1, '#e8d5b4');
+    ctx.fillStyle = g; ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = Math.max(1.4, cell * 0.028);
+    ctx.strokeStyle = isRed ? '#b0313c' : '#2c3038';
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, r * 0.84, 0, Math.PI * 2);
+    ctx.lineWidth = 1; ctx.strokeStyle = isRed ? 'rgba(176,49,60,.35)' : 'rgba(44,48,56,.3)'; ctx.stroke();
+    ctx.fillStyle = isRed ? '#a8262f' : '#22262c';
+    ctx.font = `${Math.round(cell * 0.5)}px "KaiTi","STKaiti","SimSun",serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(GLYPH[isRed ? 1 : -1][Math.abs(p)], x, y + cell * 0.015);
+    ctx.restore();
+  }
+
+  function draw() {
+    if (!cv.width) return;
+    ctx.clearRect(0, 0, W, H);
+    drawBoardBg();
+    if (S.lastMove) {
+      for (const s of [XQ.fOf(S.lastMove), XQ.tOf(S.lastMove)]) {
+        const [x, y] = toScreen(s);
+        ctx.strokeStyle = 'rgba(216,166,87,.8)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(x, y, cell * 0.47, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+    if (S.showHints && S.sel >= 0) {
+      for (const mv of S.legalFrom) {
+        const t = XQ.tOf(mv), [x, y] = toScreen(t);
+        ctx.beginPath();
+        if (S.board[t] !== 0) {
+          ctx.strokeStyle = 'rgba(192,50,60,.75)'; ctx.lineWidth = 2.5;
+          ctx.arc(x, y, cell * 0.46, 0, Math.PI * 2); ctx.stroke();
+        } else {
+          ctx.fillStyle = 'rgba(47,110,92,.55)';
+          ctx.arc(x, y, Math.max(3.2, cell * 0.1), 0, Math.PI * 2); ctx.fill();
+        }
+      }
+    }
+    for (let s = 0; s < 90; s++) {
+      const p = S.board[s];
+      if (p) drawPiece(s, p, { sel: s === S.sel });
+    }
+  }
+
+  // ---------- 几何 ----------
+  const sc = $('scatter'), sctx = sc.getContext('2d');
+  function drawScatter(g) {
+    const w = sc.clientWidth, h = sc.clientHeight;
+    sc.width = w * dpr; sc.height = h * dpr;
+    sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    sctx.clearRect(0, 0, w, h);
+    // 坐标范围
+    const all = Object.values(MODEL.coords2);
+    let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+    for (const c of all) { minX = Math.min(minX, c[0]); maxX = Math.max(maxX, c[0]); minY = Math.min(minY, c[1]); maxY = Math.max(maxY, c[1]); }
+    const span = Math.max(maxX - minX, maxY - minY) * 1.08;
+    const cx0 = (minX + maxX) / 2, cy0 = (minY + maxY) / 2;
+    const sx = (x) => w / 2 + (x - cx0) / span * (w - 26);
+    const sy = (y) => h / 2 - (y - cy0) / span * (h - 26);
+
+    sctx.strokeStyle = '#1c222b'; sctx.lineWidth = 1;
+    for (let i = -2; i <= 2; i++) {
+      sctx.beginPath(); sctx.moveTo(sx(cx0 + i * span / 4), 6); sctx.lineTo(sx(cx0 + i * span / 4), h - 6); sctx.stroke();
+      sctx.beginPath(); sctx.moveTo(6, sy(cy0 + i * span / 4)); sctx.lineTo(w - 6, sy(cy0 + i * span / 4)); sctx.stroke();
+    }
+
+    if (!g || !g.tokens.length) return;
+    const at = g.layers[Math.min(S.layer, g.layers.length - 1)];
+    // 拟合直线
+    const ax = at.axis, ct = at.centroid;
+    const L = span * 0.95;
+    sctx.strokeStyle = 'rgba(216,166,87,.85)'; sctx.lineWidth = 1.6;
+    sctx.beginPath();
+    sctx.moveTo(sx(ct[0] - ax[0] * L), sy(ct[1] - ax[1] * L));
+    sctx.lineTo(sx(ct[0] + ax[0] * L), sy(ct[1] + ax[1] * L));
+    sctx.stroke();
+
+    const droppedKeys = new Set(g.dropped.filter(d => d.layer <= S.layer).map(d => d.token));
+    for (const t of g.tokens) {
+      const x = sx(t.cx), y = sy(t.cy);
+      const isSelf = t.key[0] === 'S';
+      if (droppedKeys.has(t.key)) {
+        sctx.strokeStyle = 'rgba(130,140,155,.55)'; sctx.lineWidth = 1;
+        sctx.beginPath(); sctx.arc(x, y, 3.6 * Math.max(1, t.w), 0, Math.PI * 2); sctx.stroke();
+      } else {
+        sctx.fillStyle = isSelf ? 'rgba(224,69,90,.92)' : 'rgba(91,143,214,.9)';
+        sctx.beginPath(); sctx.arc(x, y, 2.9 * Math.max(1, t.w), 0, Math.PI * 2); sctx.fill();
+      }
+    }
+    // 质心
+    sctx.strokeStyle = '#e6c98a'; sctx.lineWidth = 1.6;
+    const mx = sx(ct[0]), my = sy(ct[1]);
+    sctx.beginPath();
+    sctx.moveTo(mx - 7, my); sctx.lineTo(mx + 7, my);
+    sctx.moveTo(mx, my - 7); sctx.lineTo(mx, my + 7);
+    sctx.stroke();
+  }
+
+  // ---------- 报告 ----------
+  function computeReport() {
+    const t0 = performance.now();
+    const g = XQ.geometry(S.board, S.side, S.layer, S.layer);
+    const r = XQ.retrieve(g.state, S.layer, S.k);
+    const ms = performance.now() - t0;
+    return { g, r, ms };
+  }
+
+  function renderReport() {
+    const rep = computeReport();
+    S.lastReport = rep;
+    const { g, r, ms } = rep;
+    const st = g.state;
+    $('vCx').textContent = st[0].toFixed(2);
+    $('vCy').textContent = st[1].toFixed(2);
+    $('vSl').textContent = st[2].toFixed(2);
+    $('vRho').textContent = st[3].toFixed(3);
+    $('pillLat').textContent = ms.toFixed(2) + ' ms';
+
+    const best = r.knn.cls, prob = r.knn.prob[CLASSES.indexOf(best)];
+    S.phase = best;
+    $('vCls').textContent = CLASS_CN[best] + ' · ' + best;
+    $('vWhy').textContent = `kNN 命中 ${r.knn.top.slice(0, 3).map(t => CLASS_CN[t[0]]).join(' / ')}；该类别决定评估权重与着法排序偏置。`;
+    $('vConf').innerHTML = `置信 ${(prob * 100).toFixed(0)}%<br>最近邻 ${r.knn.dist.toFixed(2)}`;
+
+    // 原型距离条
+    const bars = $('protoBars');
+    bars.innerHTML = '';
+    const maxD = Math.max(...r.proto.map(p => p.dist));
+    r.proto.forEach((p) => {
+      const row = document.createElement('div');
+      row.className = 'bar' + (p.cls === best ? ' hot' : '');
+      row.innerHTML = `<span>${CLASS_CN[p.cls]}</span>
+        <div class="track"><div class="fill" style="width:${Math.max(3, (1 - p.dist / (maxD + 1e-6)) * 100)}%"></div></div>
+        <span class="num">${p.dist.toFixed(2)}</span>`;
+      bars.appendChild(row);
+    });
+    $('knnNote').textContent = `kNN(k=${S.k}) 距离加权投票：最近邻 ${r.knn.dist.toFixed(3)}，前 3 邻 ${r.knn.top.slice(0, 3).map(t => CLASS_CN[t[0]] + '(' + t[1].toFixed(2) + ')').join(' / ')}`;
+
+    renderBook();
+    renderWin();
+
+    // 压缩阶梯
+    const ladder = $('ladder');
+    ladder.innerHTML = '';
+    const maxRho = Math.max(...g.layers.map(l => l.residual), 1e-6);
+    for (const l of g.layers) {
+      const col = document.createElement('div');
+      col.className = 'col' + (l.layer === S.layer ? ' on' : '');
+      col.style.height = '52px';
+      col.innerHTML = `<div class="bar2" style="height:${Math.max(4, l.residual / maxRho * 100)}%"></div>`;
+      col.title = `第${l.layer}层 残差 ${l.residual.toFixed(3)} 保留 ${l.kept} 枚`;
+      col.onclick = () => { S.layer = l.layer; $('rngLayer').value = l.layer; $('lblLayer').textContent = l.layer; renderAll(); };
+      ladder.appendChild(col);
+    }
+    $('ladderLabels').innerHTML = g.layers.map((l) =>
+      `<span style="flex:1;text-align:center;font-size:9px;color:${l.layer === S.layer ? '#d8a657' : '#5f6675'}">${l.layer}</span>`
+    ).join('');
+
+    const chips = $('chips');
+    chips.innerHTML = '';
+    g.dropped.forEach((d) => {
+      const ch = document.createElement('span');
+      ch.className = 'chip' + (d.layer <= S.layer ? ' g' : '');
+      const p = d.token[0] === 'S';
+      ch.textContent = `${d.layer}·${GLYPH[p ? 1 : -1][d.type]}${d.token.slice(2).replace('@', '')}`;
+      chips.appendChild(ch);
+    });
+    $('compNote').textContent = `当前 L=${S.layer}：保留 ${g.layers[S.layer].kept} 枚棋子，残差 ${g.layers[S.layer].residual.toFixed(3)}，斜率 ${g.layers[S.layer].slope.toFixed(2)}。被剔除的最远点往往是对峙中的接触子力，剔除后阵形更“干净”，代价是丢掉棋子身份。`;
+
+    drawScatter(g);
+    $('pillAcc').textContent = (MODEL.layers[S.layer].knn_acc * 100).toFixed(1) + '%';
+  }
+
+  // ---------- 对局 ----------
+  function resetGame() {
+    S.board = XQ.initial();
+    S.side = XQ.RED;
+    S.playerSide = parseInt($('selSide').value, 10);
+    S.sel = -1; S.legalFrom = []; S.history = []; S.log = [];
+    S.lastMove = null; S.over = false; S.thinking = false; S.rep = {};
+    S.keys = [XQ.keyOf(S.board, S.side)];
+    S.flip = S.playerSide === XQ.BLACK;
+    $('moves').innerHTML = '';
+    renderAll();
+    updateStatus();
+    if (S.playerSide !== S.side) setTimeout(aiTurn, 600);
+  }
+
+  function pushLog(mv, side, piece, captured, tag) {
+    const f = XQ.fOf(mv), t = XQ.tOf(mv);
+    const id = (s) => String.fromCharCode(97 + (s % 9)) + ((s / 9) | 0);
+    S.log.push({ text: `${GLYPH[side === 1 ? 1 : -1][Math.abs(piece)]} ${id(f)}${captured ? '×' : '→'}${id(t)}`, side, tag });
+    const box = $('moves');
+    box.innerHTML = S.log.map((m) => `<span class="${m.side === 1 ? 'redm' : 'blkm'}">${m.side === 1 ? '红 ' : '黑 '}${m.text}${m.tag ? `<i>${m.tag}</i>` : ''}</span>`).join('');
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function move(mv) {
+    const f = XQ.fOf(mv), t = XQ.tOf(mv);
+    const piece = S.board[f], captured = S.board[t] !== 0;
+    S.history.push({ board: Array.from(S.board), side: S.side, last: S.lastMove, logLen: S.log.length, rep: Object.assign({}, S.rep), keysLen: S.keys.length });
+    S.keys.push(XQ.keyOf(S.board, S.side));
+    S.board[t] = piece;
+    S.board[f] = 0;
+    pushLog(mv, S.side, piece, captured, S.bookTag);
+    S.bookTag = null;
+    S.lastMove = mv;
+    S.side = -S.side;
+    S.sel = -1; S.legalFrom = [];
+    const key = S.board.join(',') + '|' + S.side;
+    S.rep[key] = (S.rep[key] || 0) + 1;
+
+    const legal = XQ.legal(S.board, S.side);
+    if (!legal.length) {
+      S.over = true;
+      const mate = XQ.inCheck(S.board, S.side);
+      S.result = `${S.side === 1 ? '黑' : '红'}方胜 · ${mate ? '绝杀' : '困毙'}`;
+    } else if (S.rep[key] >= 3) {
+      S.over = true; S.result = '三次重复局面 · 和棋';
+    }
+    draw(); renderAll(); updateStatus();
+    const auto = !S.suppressAuto;
+    S.suppressAuto = false;
+    if (!S.over && auto && S.side !== S.playerSide) setTimeout(aiTurn, 120);
+  }
+
+  function aiTurn(force) {
+    if (S.over || S.thinking) return;
+    if (!force && S.side === S.playerSide) return;
+    S.suppressAuto = !!force;
+    S.thinking = true;
+    updateStatus();
+    setTimeout(() => {
+      const depth = parseInt($('selLevel').value, 10);
+      const budget = depth >= 5 ? 1600 : depth >= 4 ? 850 : 260;
+      const noise = depth >= 5 ? 0 : depth >= 4 ? 6 : 45;
+      const phase = S.useGeom ? S.phase : 'maneuver';
+      const bk = S.useBook ? XQ.bookPick(S.board, S.side, S.history.length) : null;
+      if (bk) {
+        S.thinking = false;
+        const wp = XQ.winProbBow(S.board, S.side);
+        S.bookTag = '谱';
+        move(bk.mv);
+        $('statusHint').textContent = wp
+          ? `AI 走谱着（该局面 ${bk.n} 局）· 预测胜率 ${(wp.score * 100).toFixed(0)}%`
+          : `AI 走谱着（该局面 ${bk.n} 局）`;
+        return;
+      }
+      const t0 = performance.now();
+      const res = XQ.search(S.board, S.side, { depth, budget, phase, history: S.keys, noise });
+      const used = performance.now() - t0;
+      S.thinking = false;
+      $('statusHint').textContent = `AI：${CLASS_CN[phase]} 相位 · 深度 ${res.depth} · ${res.nodes} 节点 · ${used.toFixed(0)} ms`;
+      if (res.mv) move(res.mv);
+      else updateStatus();
+    }, 30);
+  }
+
+  function onClickCell(s) {
+    if (S.over || S.thinking) return;
+    if (S.side !== S.playerSide) return;
+    const p = S.board[s];
+    if (S.sel >= 0 && S.legalFrom.some((m) => XQ.tOf(m) === s)) {
+      move(XQ.mk(S.sel, s)); return;
+    }
+    if (p !== 0 && (p > 0 ? 1 : -1) === S.side) {
+      S.sel = s;
+      S.legalFrom = XQ.legal(S.board, S.side).filter((m) => XQ.fOf(m) === s);
+      draw();
+      const n = S.legalFrom.length;
+      $('statusHint').textContent = n ? `${GLYPH[S.side === 1 ? 1 : -1][Math.abs(p)]} 有 ${n} 个合法落点` : '该子被牵制，无合法落点';
+    } else {
+      S.sel = -1; S.legalFrom = []; draw();
+    }
+  }
+
+  function updateStatus() {
+    const dot = $('dot');
+    const who = $('statusWho');
+    if (S.over) {
+      dot.className = 'dot gold';
+      who.textContent = S.result || '对局结束';
+      $('statusHint').textContent = '点击「新对局」重新开始';
+      return;
+    }
+    const sideName = S.side === 1 ? '红方' : '黑方';
+    if (S.thinking) { dot.className = 'dot gold'; who.textContent = 'AI 思考中…'; return; }
+    const chk = XQ.inCheck(S.board, S.side);
+    dot.className = 'dot' + (S.side === 1 ? ' red' : '');
+    who.textContent = `${sideName}走棋${S.side === S.playerSide ? '（你）' : '（AI）'}${chk ? ' · 被将军' : ''}`;
+    if (!S.sel) {
+      $('statusHint').textContent = S.side !== S.playerSide
+        ? '点「让 AI 走」让它接着走，或点「悔棋」回到你走'
+        : (chk ? '必须先应将' : '点击棋子查看合法着法');
+    }
+  }
+
+  function renderAll() { draw(); renderReport(); syncGeomBtn(); syncBookBtn(); }
+
+  // ---------- 开局库面板 ----------
+  function mvLabel(mv) {
+    const f = XQ.fOf(mv), t = XQ.tOf(mv);
+    const p = S.board[f];
+    const g = GLYPH[S.side === 1 ? 1 : -1][Math.abs(p)] || '?';
+    const nm = (s) => String.fromCharCode(97 + (s % 9)) + ((s / 9) | 0);
+    return `${g} ${nm(f)}→${nm(t)}`;
+  }
+
+  function renderBook() {
+    const note = $('bookLive'), bars = $('bookBars');
+    if (!note || !bars) return;
+    bars.innerHTML = '';
+    const info = XQ.bookInfo();
+    if (!info) { note.textContent = '未载入开局库'; return; }
+    if (!S.useBook) { note.textContent = '开局库已关闭，全部走搜索'; return; }
+    const lk = XQ.bookLookup(S.board, S.side, S.history.length);
+    if (!lk) {
+      note.textContent = `该局面不在库中（脱谱），AI 改走 α-β 搜索。库共 ${info.games} 局 / ${info.positions} 个局面，前 ${info.plies} 手。`;
+      return;
+    }
+    note.textContent = `在库：${lk.total} 局、${lk.moves.length} 个候选着法（谱只决定走哪手；胜率看上面的预测，与库是否命中无关）。`;
+    const totalRow = lk.total || 1;
+    lk.moves.slice(0, 4).forEach((m, i) => {
+      const row = document.createElement('div');
+      row.className = 'bar' + (i === 0 ? ' hot' : '');
+      row.innerHTML = `<span>${mvLabel(m.mv)}</span>
+        <div class="track"><div class="fill" style="width:${Math.max(4, (m.n / totalRow) * 100)}%"></div></div>
+        <span class="num">${m.n} 局</span>`;
+      bars.appendChild(row);
+    });
+  }
+
+  // ---------- 胜率预测 ----------
+  function barsOf(box, rows) {
+    box.innerHTML = '';
+    rows.forEach(([name, p, hot]) => {
+      const row = document.createElement('div');
+      row.className = 'bar' + (hot ? ' hot' : '');
+      row.innerHTML = `<span>${name}</span>
+        <div class="track"><div class="fill" style="width:${Math.max(3, p * 100)}%"></div></div>
+        <span class="num">${(p * 100).toFixed(0)}%</span>`;
+      box.appendChild(row);
+    });
+  }
+
+  function renderWin() {
+    const big = $('vScore');
+    if (!big) return;
+    const mine = S.side === S.playerSide ? '你这边' : 'AI 这边';
+    const who = `${mine}（${S.side === 1 ? '红' : '黑'}方）`;
+
+    // 主模型：令牌词袋
+    const wb = XQ.winProbBow(S.board, S.side);
+    if (wb) {
+      big.textContent = `胜率 ${(wb.score * 100).toFixed(0)}%`;
+      $('vScoreWhy').textContent = `${who}的期望得分 = 胜 + ½·和；输入是当前 ${wb.tokens} 个令牌（其中 ${wb.hit} 个在模型词表内）。`;
+      const m = MODEL.winprob_bow.metrics;
+      $('vScoreConf').innerHTML = `三分类准确率 ${(m.acc * 100).toFixed(0)}%<br>多数类 ${(m.majority * 100).toFixed(0)}%`;
+      barsOf($('winBars'), [['胜', wb.pWin, true], ['和', wb.pDraw, false], ['负', wb.pLoss, false]]);
+      $('winNote').textContent = `令牌词袋 + 多项逻辑回归，训练样本 ${m.samples} 个（真实棋谱局面 + 最终胜负）；准确率 ${(m.acc * 100).toFixed(1)}%、宏F1 ${(m.f1 * 100).toFixed(1)}%，胜率预测平均误差 ${m.score_mae}。`;
+    } else {
+      big.textContent = '—';
+      $('winNote').textContent = 'model.json 缺 winprob_bow 段';
+    }
+
+    // 对照：纯四维状态
+    const wg = XQ.winProb(S.board, S.side);
+    const gbox = $('geoWinBars');
+    if (!wg) { $('geoWinNote').textContent = '未训练'; return; }
+    const m = MODEL.winprob.metrics;
+    barsOf(gbox, [['胜', wg.pWin, true], ['和', wg.pDraw, false], ['负', wg.pLoss, false]]);
+    $('geoWinNote').textContent = `只看第 ${wg.layer} 层四维状态 [c_x, c_y, tanθ, ρ]：准确率 ${(m.acc * 100).toFixed(1)}%，多数类 ${(m.majority * 100).toFixed(1)}%，胜率预测平均误差 ${m.score_mae} —— 基本和“全猜和棋”差不多，说明四维状态承载不了胜负信息。`;
+  }
+
+  function syncGeomBtn() { $('btnGeom').textContent = '几何相位：' + (S.useGeom ? '开' : '关'); }
+  function syncBookBtn() {
+    const b = $('btnBook');
+    const info = XQ.bookInfo();
+    b.textContent = '开局库：' + (S.useBook ? '开' : '关');
+    b.title = info ? `${info.games} 局棋谱 · ${info.positions} 个局面` : '未载入开局库';
+    b.disabled = !info;
+  }
+  function syncHintBtn() { $('btnHints').textContent = '显示合法着法：' + (S.showHints ? '开' : '关'); }
+
+  // ---------- 事件 ----------
+  cv.addEventListener('click', (e) => {
+    const rect = cv.getBoundingClientRect();
+    const mx = (e.clientX - rect.left), my = (e.clientY - rect.top);
+    let gx = Math.round((mx - padX) / cell), gy = Math.round((my - padY) / cell);
+    if (S.flip) { gx = 8 - gx; gy = 9 - gy; }
+    if (gx < 0 || gx > 8 || gy < 0 || gy > 9) return;
+    const d = Math.hypot(mx - (padX + (S.flip ? 8 - gx : gx) * cell), my - (padY + (S.flip ? 9 - gy : gy) * cell));
+    if (d > cell * 0.55) return;
+    onClickCell(XQ.sq(gx, gy));
+  });
+
+  $('btnNew').onclick = resetGame;
+  $('btnUndo').onclick = () => {
+    if (!S.history.length || S.thinking) return;
+    let steps = S.side === S.playerSide ? 1 : 2;
+    for (let i = 0; i < steps && S.history.length; i++) {
+      const h = S.history.pop();
+      S.board = h.board; S.side = h.side; S.lastMove = h.last; S.log = S.log.slice(0, h.logLen); S.rep = h.rep;
+      S.keys = S.keys.slice(0, h.keysLen);
+    }
+    S.over = false; S.sel = -1; S.legalFrom = [];
+    const box = $('moves');
+    box.innerHTML = S.log.map((m) => `<span class="${m.side === 1 ? 'redm' : 'blkm'}">${m.side === 1 ? '红 ' : '黑 '}${m.text}</span>`).join('');
+    renderAll(); updateStatus();
+  };
+  $('btnAI').onclick = () => { if (!S.over && !S.thinking) aiTurn(true); };
+  $('selSide').onchange = resetGame;
+  $('selLevel').onchange = () => {};
+  $('btnBook').onclick = () => { S.useBook = !S.useBook; syncBookBtn(); };
+  $('btnGeom').onclick = () => { S.useGeom = !S.useGeom; syncGeomBtn(); };
+  $('btnHints').onclick = () => { S.showHints = !S.showHints; syncHintBtn(); draw(); };
+  $('btnFlip').onclick = () => { S.flip = !S.flip; draw(); };
+  $('rngLayer').oninput = (e) => { S.layer = +e.target.value; $('lblLayer').textContent = S.layer; renderAll(); };
+  $('rngK').oninput = (e) => { S.k = +e.target.value; $('lblK').textContent = S.k; renderReport(); };
+
+  document.querySelectorAll('.tabs button').forEach((b) => {
+    b.onclick = () => {
+      document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      $('tab-eng').classList.toggle('hide', b.dataset.tab !== 'eng');
+      $('tab-exp').classList.toggle('hide', b.dataset.tab !== 'exp');
+      if (b.dataset.tab === 'eng') drawScatter(S.lastReport ? S.lastReport.g : null);
+    };
+  });
+
+  window.addEventListener('resize', () => { layout(); if (S.lastReport) drawScatter(S.lastReport.g); });
+
+  // ---------- 实验数据 ----------
+  function fillExperiment() {
+    const tb = $('layerTable').querySelector('tbody');
+    tb.innerHTML = '';
+    const best = MODEL.layers.reduce((a, b) => (b.knn_acc > a.knn_acc ? b : a));
+    MODEL.layers.forEach((l) => {
+      const tr = document.createElement('tr');
+      if (l.knn_acc === best.knn_acc) tr.className = 'hi';
+      tr.innerHTML = `<td>${l.layer}</td><td>${(l.proto_acc * 100).toFixed(1)}</td>
+        <td>${(l.knn_acc * 100).toFixed(1)}</td><td>${(l.knn_f1 * 100).toFixed(1)}</td><td>${l.mean_tokens.toFixed(1)}</td>`;
+      tb.appendChild(tr);
+    });
+    const bestProto = MODEL.layers.reduce((a, b) => (b.proto_acc > a.proto_acc ? b : a));
+    const wpPart = (MODEL.winprob_bow && MODEL.winprob)
+      ? `　胜率模型（令牌词袋）：三分类准确率 ${(MODEL.winprob_bow.metrics.acc * 100).toFixed(1)}%（多数类 ${(MODEL.winprob_bow.metrics.majority * 100).toFixed(1)}%），胜率平均误差 ${MODEL.winprob_bow.metrics.score_mae}；同样样本下纯四维状态只有 ${(MODEL.winprob.metrics.acc * 100).toFixed(1)}%，约等于多数类。`
+      : '';
+    $('expNote').innerHTML = `语料 ${MODEL.meta.positions} 个局面（${MODEL.meta.games} 局自对弈 + ${MODEL.meta.pgn_files} 份真实棋谱中的 ${MODEL.meta.real_positions || 0} 个局面），词表 ${MODEL.meta.vocab} 个令牌，覆盖率 ${(MODEL.meta.coverage * 100).toFixed(1)}%。五折分层交叉验证，k=${MODEL.meta.k}，评估用 ${MODEL.meta.eval_positions} 个局面的分层抽样。最高 kNN 出现在第 ${best.layer} 层（${(best.knn_acc * 100).toFixed(1)}%），第 10 层为 ${(MODEL.layers[10].knn_acc * 100).toFixed(1)}%。${wpPart}`;
+
+    const cmp = $('cmpTable').querySelector('tbody');
+    const rows = [
+      ['4维 kNN（最佳层 ' + best.layer + '）', (best.knn_acc * 100).toFixed(1) + '%', (best.knn_f1 * 100).toFixed(1) + '%'],
+      ['4维 最近原型（第 ' + bestProto.layer + ' 层）', (bestProto.proto_acc * 100).toFixed(1) + '%', (bestProto.proto_f1 * 100).toFixed(1) + '%'],
+      ['17维 kNN（八维坐标 · 第 10 层）', (MODEL.dim8.knn10 * 100).toFixed(1) + '%', '—'],
+      ['17维 最近原型', (MODEL.dim8.proto10 * 100).toFixed(1) + '%', '—'],
+      ['令牌词袋 + 逻辑回归', (MODEL.baseline.bow_lr[0] * 100).toFixed(1) + '%', (MODEL.baseline.bow_lr[2] * 100).toFixed(1) + '%'],
+      ['多数类', (MODEL.baseline.majority * 100).toFixed(1) + '%', '—']
+    ];
+    cmp.innerHTML = rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('');
+
+    $('pillModel').textContent = MODEL.meta.model_kb + ' KB';
+    $('pillAcc').textContent = (MODEL.layers[7].knn_acc * 100).toFixed(1) + '%';
+    $('pillLat').textContent = MODEL.meta.latency_ms + ' ms';
+    const bkInfo = XQ.bookInfo();
+    const bkBox = $('bookNote');
+    if (bkBox) {
+      bkBox.innerHTML = bkInfo
+        ? `开局库：${bkInfo.games} 局真实棋谱挖出的 ${bkInfo.positions} 个局面（统计前 ${bkInfo.plies} 手），按走子方胜率排序；只走主流着法（局数占比 ≥4%），同分档按样本量抽样，所以同一条线不会每局都一模一样。`
+        : '开局库未载入。';
+    }
+  }
+
+  // ---------- 启动 ----------
+  layout(); fillExperiment(); syncHintBtn(); syncBookBtn(); resetGame();
+})();
+</script>
+</body>
+</html>
